@@ -20,5 +20,5 @@ function storyElement({ name, url }) {
     </li>
   );
 }
-console.log(document.getElementById("root"));
+
 Didact.render(appElement, document.getElementById("root"));

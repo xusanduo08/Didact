@@ -17,11 +17,8 @@ function createTextElement(value) {
 
 function render(element, parentDom){
   const { type, props } = element;
-
-  const isTextElement = type === 'TEXT ELEMENT';
+  const isTextElement = type === 'TEXT_ELEMENT';
   const dom = isTextElement ? document.createTextNode('') : document.createElement(type);
-
- 
 
   const isListener = name => name.startsWith('on');
   Object.keys(props).filter(isListener).forEach(name => {
@@ -31,12 +28,12 @@ function render(element, parentDom){
 
   const isAttribute = name => !isListener(name) && name != 'children';
   Object.keys(props).filter(isAttribute).forEach(name => {
-    dom[name] = props[name];
+    dom[name] = props[name]; // 文本节点的文本值通过nodeValue属性渲染到页面上
   })
 
   const childElements = props.children || [];
   childElements.forEach(childElement => render(childElement, dom));
-  console.log(element, parentDom)
+  
   parentDom.appendChild(dom);
 }
 
