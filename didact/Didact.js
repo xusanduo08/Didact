@@ -1,5 +1,6 @@
 const TEXT_ELEMENT = 'TEXT_ELEMENT';
 
+// 创建Didact元素，返回含有type、props属性的对象
 function createElement(type, config, ...args) {
   const props = Object.assign({}, config);
   const hasChildren = args.length > 0;
