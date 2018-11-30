@@ -16,7 +16,7 @@ function createTextElement(value) {
   return createElement(TEXT_ELEMENT, { nodeValue: value });
 }
 
-let rootInstance = null;
+let rootInstance = null; // 根实例
 
 function render(element, container) {
   const prevProps = rootInstance;
@@ -43,16 +43,15 @@ function instantiate(element) {
     return instance;
   } else {
     const instance = {};
-    const publicInstance = createPublicInstance(element, instance);
-    const childElement = publicInstance.render();
-    const childInstance = instantiate(childElement);
+    const publicInstance = createPublicInstance(element, instance); // 创建公共实例
+    const childElement = publicInstance.render(); // 调用公共实例的render方法，获取组件的子元素
+    const childInstance = instantiate(childElement); // 实例化组件的子元素
     const dom = childInstance.dom;
 
     Object.assign(instance, { dom, element, childInstance, publicInstance });
     return instance;
   }
   
-  return instance;
 }
 
 // 更新DOM节点属性
@@ -98,7 +97,11 @@ function reconcile(parentDom, instance, element){
     instance.element = element;
     return instance;
   } else {
+    // 这地方为什么要做这么一个更新操作？
+    // 答：对象自身的属性和外界是没有关联的。组件是new出来的，其props和外界已经没有了关联，而element身上的props还能反应出外界的变化，所以这时候要更新一下。
+    console.log(element.props, instance.publicInstance)
     instance.publicInstance.props = element.props;
+    
     const childElement = instance.publicInstance.render();
     const oldChildInstance = instance.childInstance;
     const childInstance = reconcile(parentDom, oldChildInstance, childElement);
