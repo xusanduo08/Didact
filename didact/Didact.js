@@ -27,16 +27,31 @@ function render(element, container) {
 // 实例化一个元素（就是将元素对应的DOM放到对应父DOM中，只有新增的元素需要实例化）
 function instantiate(element) {
   const { type, props } = element;
-  const isTextElement = type === 'TEXT_ELEMENT';
-  const dom = isTextElement ? document.createTextNode('') : document.createElement(type);
-  updateDomProperties(dom, [], props);
+  const isDomElement = typeof type === 'string';
 
-  const childElements = props.children || [];
-  const childInstances = childElements.map(instantiate); // 递归实例化子元素
-  const childDoms = childInstances.map(childInstance => childInstance.dom);
-  childDoms.forEach(childDom => dom.appendChild(childDom));
+  if(isDomElement){
+    const isTextElement = type === 'TEXT_ELEMENT';
+    const dom = isTextElement ? document.createTextNode('') : document.createElement(type);
+    updateDomProperties(dom, [], props);
 
-  const instance = { dom, element, childInstances };
+    const childElements = props.children || [];
+    const childInstances = childElements.map(instantiate); // 递归实例化子元素
+    const childDoms = childInstances.map(childInstance => childInstance.dom);
+    childDoms.forEach(childDom => dom.appendChild(childDom));
+
+    const instance = { dom, element, childInstances };
+    return instance;
+  } else {
+    const instance = {};
+    const publicInstance = createPublicInstance(element, instance);
+    const childElement = publicInstance.render();
+    const childInstance = instantiate(childElement);
+    const dom = childInstance.dom;
+
+    Object.assign(instance, { dom, element, childInstance, publicInstance });
+    return instance;
+  }
+  
   return instance;
 }
 
@@ -72,16 +87,25 @@ function reconcile(parentDom, instance, element){
     return newInstance
   } else if(element == null){ // 需要删除一些节点
     parentDom.removeChild(instance.dom);
-    return null;
-  } else if(instance.element.type === element.type){ // 类型相同，更新节点
-    updateDomProperties(instance.dom, instance.element.props, element.props); // 更新属性
-    instance.childInstances = reconcileChildren(instance, element); // 对子元素进行一致性校验
-    instance.element = element;
-    return instance; 
-  } else {
+    return null;     
+  } else if(instance.element.type !== element.type) {
     const newInstance = instantiate(element);
     parentDom.replaceChild(newInstance.dom, instance.dom);
     return newInstance;
+  } else if(typeof element.type === 'string'){
+    updateDomProperties(instance.dom, instance.element.props, element.props); // 更新属性
+    instance.childInstances = reconcileChildren(instance, element); // 对子元素进行一致性校验
+    instance.element = element;
+    return instance;
+  } else {
+    instance.publicInstance.props = element.props;
+    const childElement = instance.publicInstance.render();
+    const oldChildInstance = instance.childInstance;
+    const childInstance = reconcile(parentDom, oldChildInstance, childElement);
+    instance.dom = childInstance.dom;
+    instance.childInstance = childInstance;
+    instance.element = element;
+    return instance;
   }
 }
 
@@ -102,7 +126,33 @@ function reconcileChildren(instance, element){
   return newChildInstances.filter(instance => instance != null);
 }
 
+function createPublicInstance(element, internalInstance){
+  const { type, props} = element;
+  const publicInstance = new type(props);
+  publicInstance.__internalInstance = internalInstance;
+  return publicInstance;
+}
+
+class Component{
+  constructor(props){
+    this.props = props;
+    this.state = this.state || {};
+  }
+
+  setState(partialState){
+    this.state = Object.assign({}, this.state, partialState);
+    updateInstance(this.__internalInstance);
+  }
+}
+
+function updateInstance(internalInstance){
+  const parentDom = internalInstance.dom.parentNode;
+  const element = internalInstance.element;
+  reconcile(parentDom, internalInstance, element);
+}
+
 export default {
   render,
-  createElement
+  createElement,
+  Component
 }
