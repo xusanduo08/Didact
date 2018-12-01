@@ -1,8 +1,15 @@
+/**
+ * render => reconcile => instantiate => 初始化实例，creratePublicInstance
+ * publicInstance:{updateInstance:(f), __internalInstance:(Object)}
+ * updateInstance=>reconcile(internalInstance.dom.parentDom, internalInstance, internalInstance.element) =>重新执行公共实例render方法，获取新的子元素
+ * 
+*/
+
 const TEXT_ELEMENT = 'TEXT_ELEMENT';
 
 // 创建Didact元素，返回含有type、props属性的对象
 function createElement(type, config, ...args) {
-  const props = Object.assign({}, config);
+  const props = Object.assign({}, config); // 新生成一个对象
   const hasChildren = args.length > 0;
   const rawChildren = hasChildren ? [].concat(...args) : [];
 
@@ -18,9 +25,10 @@ function createTextElement(value) {
 
 let rootInstance = null; // 根实例
 
+// element就是createElement返回的结果
 function render(element, container) {
-  const prevProps = rootInstance;
-  const nextInstance = reconcile(container, prevProps, element);
+  const prevInstance = rootInstance;
+  const nextInstance = reconcile(container, prevInstance, element);
   rootInstance = nextInstance;
 }
 
@@ -46,7 +54,7 @@ function instantiate(element) {
     const publicInstance = createPublicInstance(element, instance); // 创建公共实例
     const childElement = publicInstance.render(); // 调用公共实例的render方法，获取组件的子元素
     const childInstance = instantiate(childElement); // 实例化组件的子元素
-    const dom = childInstance.dom;
+    const dom = childInstance.dom; // 这地方把子元素对应的dom给了组件内部实例的dom属性
 
     Object.assign(instance, { dom, element, childInstance, publicInstance });
     return instance;
@@ -97,12 +105,10 @@ function reconcile(parentDom, instance, element){
     instance.element = element;
     return instance;
   } else {
-    // 这地方为什么要做这么一个更新操作？
-    // 答：对象自身的属性和外界是没有关联的。组件是new出来的，其props和外界已经没有了关联，而element身上的props还能反应出外界的变化，所以这时候要更新一下。
-    console.log(element.props, instance.publicInstance)
+    // 不明白这地方为什么要做这么一个更新操作？
     instance.publicInstance.props = element.props;
     
-    const childElement = instance.publicInstance.render();
+    const childElement = instance.publicInstance.render();// 重新render，获取到最新的子元素
     const oldChildInstance = instance.childInstance;
     const childInstance = reconcile(parentDom, oldChildInstance, childElement);
     instance.dom = childInstance.dom;
@@ -132,6 +138,7 @@ function reconcileChildren(instance, element){
 function createPublicInstance(element, internalInstance){
   const { type, props} = element;
   const publicInstance = new type(props);
+  
   publicInstance.__internalInstance = internalInstance;
   return publicInstance;
 }
@@ -150,7 +157,8 @@ class Component{
 
 function updateInstance(internalInstance){
   const parentDom = internalInstance.dom.parentNode;
-  const element = internalInstance.element;
+  const element = internalInstance.element; //为什么要取内部实例的element，而不是重新render一下？答：reder获取的是组件的子元素，这地方需要的是组件对应的元素
+  console.log(internalInstance); // true
   reconcile(parentDom, internalInstance, element);
 }
 
