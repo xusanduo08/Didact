@@ -86,7 +86,7 @@ let fiber = {
 
 `parent`，`child`以及`sibling`将被用来构建一颗描述组件树的fiber树。`stateNode`则是指向一个DOM元素或者是用户定义的组件的实例。
 
-![变量说明](F:\Didact\img\201812031109.png)
+![变量说明](.\img\201812031109.png)
 
 上面的图片展示了我们需要支持的三种类型的组件：
 
@@ -94,15 +94,89 @@ let fiber = {
 * `Foo`对应的fiber我们称为__class components__，对应的`tag`标签值为`CLASS_COMPONENT`。这一类fiber的`type`属性值为指向用户定义的组件类的引用。
 * `div`对应的fiber我们称为__host root__。host root和host component都含有一个DOM元素作为`stateNode`的属性值，但host root作为fiber树的根，它将会受到一些特别的对待。我们使用`tag:HOST_ROOT`来区分host root。注意到，此类fiber的`stateNode`对应的DOM节点将会被传入到`Didact.render()`中。
 
-另一个比较重要的属性是`alternate`。大多数情况下我们代码中存在两棵fiber树：一颗对应着已经渲染到页面的DOM，我们称之为current tree或者old tree；另一颗为我们更新（调用`setState()`或者`Didact.render()`）过程中构建出来的树，我们称之为work-in-progress-tree。
+另一个比较重要的属性是`alternate`。大多数情况下我们代码中存在两棵fiber树：一颗对应着已经渲染到页面的DOM，我们称之为current tree或者old tree；另一颗为我们更新（调用`setState()`或者`Didact.render()`）过程中构建出来的树，我们称之为work-in-progress tree。（这两棵树的节点都是一个个fiber）
 
-work-in-progress tree不会和old tree共享任何fiber信息。一旦work-in-progress tree执行完毕，对应的DOM都被渲染完毕后就被变成old tree。
+work-in-progress tree不会和old tree共享fiber。一旦work-in-progress tree执行结束，对应的DOM都被渲染完毕后，work-in-progress tree就会变成old tree。
 
-`alternate`用来连接work-in-progress fibers和其对应的old tree上的fibers。一个fiber与它的`alternate`指向的old tree上的fiber拥有相同的`tag`，`type`和`stateNode`。当我们在渲染一个新的结构时，对应的fiber不会含有`alternate`属性。
+`alternate`用来连接work-in-progress tree上的fiber对应的old tree上的fiber。一个fiber与它的`alternate`指向的old tree上的fiber拥有相同的`tag`，`type`和`stateNode`。当我们在渲染一个新的结构时，对应的fiber不会含有`alternate`属性。
 
-接下来是`effects`数组和`effectTag`。当work-in-progress tree上的某一个fiber需要对DOM做一些变更时，我们会给这个fiber设置`effecttTag`属性，取值有三种：`PLACEMENT`，`UPDATE`，或者`DELETION`。为了更方便的实施DOM的变更，我们将来自fiber子结构的含有`effectTag`的fiber都保存在`effects`数组中。
+接下来是`effects`数组和`effectTag`。当work-in-progress tree上的某一个fiber需要对DOM做一些变更时，我们会给这个fiber设置`effecttTag`属性，取值有三种：`PLACEMENT`，`UPDATE`，或者`DELETION`。为了更方便的实施DOM的变更，我们将来自当前fiber下含有`effectTag`的子fiber都保存在`effects`数组中。
 
 上面说了比较多的概念，一时理解有些困难，如果跟不上也不要担心，下面我们在实际代码中来了解一下fiber。
 
 ####Didact call hierarchy
 
+我们来通过流程图来感知一下我们即将要写的代码的工作流程：
+
+![fiber流程](./img/201812038046.png)
+
+我们会从`render()`或者`setState()`开始，到`commitAllWork()`结束。
+
+#### Old code
+
+在开始重写之前先来回顾下以前写的代码。
+
+在[Element creation and JSX](https://engineering.hexacta.com/didact-element-creation-and-jsx-d05171c55c56)中我们编写了[`crerateElement()`](https://gist.github.com/pomber/2bf987785b1dea8c48baff04e453b07f)方法用来转译JSX。这个方法不需要改动，元素的结构也没有发生变化。如果你不知道我们所说的元素，`type`，`props`和`children`是什么，那么你需要回顾一下之前的内容。
+
+在[Instances, reconciliation and virtual DOM](https://engineering.hexacta.com/didact-instances-reconciliation-and-virtual-dom-9316d650f1d0)这一节我们写了`updateDomProperties()`方法用来更新DOM节点的属性。我们还写了`createDomElement()`方法用来创建DOM节点。这两个方法你都可以在[dom-utils.js](https://gist.github.com/pomber/c63bd22dbfa6c4af86ba2cae0a863064)中看到。
+
+在[Components and state](https://engineering.hexacta.com/didact-components-and-state-53ab4c900e37)这一节我们编写了`Component`基础类。这个类需要一些改动。`setState()`方法中需要去调用`scheduleUpdate()`方法。此外还要创建一个`createInstance`方法来代替之前的`createPublicInstance()`方法。`createInstance`创建的实例保存了自身对应的fiber的引用。
+
+```javascript
+class Component{
+    constructor(props){
+        this.props = props || {};
+        this.state = this.state || {};
+    }
+    
+    setState(partialState){
+        scheduleUpdate(this, partialState);
+    }
+}
+
+function createInstance(fiber){
+    const instance = new fiber.type(fiber.props);
+    instance.__fiber = fiber;
+    return instance;
+}
+```
+
+我们就从上面这段代码开始，重写剩下的功能。
+
+![render()&scheduleUpdate()](./img/201812032124.png)
+
+除了`Component`类和`createElement()`方法外，我们还有两个暴露出来的方法：`render()`和`setState()`，并且我们知道我们将在`setState()`中调用`scheduleUpdate()`。
+
+`render()`方法和`scheduleUpdate()`方法有些类似，它们都会接收一个更新任务，然后放到队列中。
+
+```javascript
+// Fiber tags
+const HOST_COMPONENT = 'host';
+const CLASS_COMPONENT = 'class';
+const HOST_ROOT = 'root';
+
+// Global state
+const updateQueue = [];
+let nextUnitOfWork = null;
+let pendingCommit = null;
+
+function render(elements, containerDom){
+    updateQueue.push({
+        from: HOST_ROOT,
+        dom: containerDom,
+        newProps: {children: elements}
+    });
+    requestIdleCallback(performWork);
+}
+
+function scheduleUpdate(instance, partialState){
+    updateQueue.push({
+        from: CLASS_COMPONENT,
+        instance: instance,
+        partialState: partialState
+    });
+    requestIdleCallback(performWork);
+}
+```
+
+我们把要实施的更新放置到`updateQueue`数组中，每次调用`render()`或者`scheduleUpdate()`方法都会往`updateQueue`中增加一个更新操作。每个更新操作携带的信息都不尽相同，我们将会在接下来的`resetNextUnitOfWork()`方法看到如何去实施这些更新。
