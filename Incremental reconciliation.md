@@ -1,6 +1,6 @@
 翻译自这里：https://engineering.hexacta.com/didact-fiber-incremental-reconciliation-b2fe028dcaec
 
-React16已经发布了，其内部重写了很多代码，内部解构也发生了一些变化，有一些新的特性也随之推出。我们在之前系列里写的代码多多少少有些过时了。在这一节，我们将会根据React16的最新结构来重写大部分的代码，代码结构和变量命名我们也会尽量按照React16的来。对于我们暴露出来的API用不到的东西我们会一并跳过，这些公开API包括：
+React16已经发布了，其内部重写了很多代码，内部结构也发生了一些变化，有一些新的特性也随之推出。我们在之前系列里写的代码多多少少有些过时了。在这一节，我们将会根据React16的最新结构来重写大部分的代码，代码结构和变量命名我们也会尽量按照React16的来。对于我们暴露出来的API用不到的东西我们会一并跳过，这些公开API包括：
 
 * `Didact.createElement`
 * `Didact.render()`（用来DOM渲染）
@@ -180,3 +180,44 @@ function scheduleUpdate(instance, partialState){
 ```
 
 我们把要实施的更新放置到`updateQueue`数组中，每次调用`render()`或者`scheduleUpdate()`方法都会往`updateQueue`中增加一个更新操作。每个更新操作携带的信息都不尽相同，我们将会在接下来的`resetNextUnitOfWork()`方法看到如何去实施这些更新。
+
+在把更新放到队列中之后，我们对`performWork()`做了一个延迟调用。
+
+![performWork()&workLoop()](./img/201812040958.png)
+
+```javascript
+const ENOUGH_TIME = 1;
+
+function performWork(deadline){
+    workLoop(deadline);
+    if(nextUnitOfWork || updateQueue.length > ){
+        requestIdleCallback(performWork);
+    }
+}
+
+function workLoop(deadline){
+    if(!nextUnitOfWork){
+        resetNextUnitOfWork();
+    }
+    while(nextUnitOfWork && deadline.timeRemaining() > ENOUGH_TIME){
+        nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+    }
+    if(pendingCommit){
+        commitAllWork(pendingCommit);
+    }
+}
+```
+
+`requestIdleCallback()`方法会将一个deadline传入目标方法（就是`performWork`）中，并执行这个方法。`performWork()`会将接收到的deadline传递给`workLoop()`方法，`workLoop()`执行结束后，`performWork()`中剩下的代码还会检查是否还有等待完成的任务，如果有，则还会再继续调用自己（会延迟调用自己，就是说在浏览器空闲的时候调用）。
+
+`workLoop()`会监视着deadline参数，如果deadline太短，方法内部会自动停止循环，并保持nextUnitOfWork不做改变，下次会继续执行这个任务。
+
+>  ENOUGH_TIME是一个代表1ms的常量，通过`deadline.timeRemaining()`与ENOUGH_TIME的比较来判断是否有足够的时间来执行当前这个任务。如果`performUnitOfWork()`所需要的时间超过ENOUGH_TIME，我们会适当增加deadline的值。deadline只是浏览器所建议的一个时间，所以增加几毫秒时没有什么问题的。
+
+`performUnitOfWork()`会为当前的更新操作构建一颗work-in-progress tree，并会比较出需要对DOM实施的变化。这些操作都是逐渐进行的，每次构建一个fiber节点。
+
+当`performUnitOfWork()`结束了当前更新所需要做的任务之后，会返回null并将要实施的更新操作保存在`pendingCommit`变量中。最后，`commitAllWork()`会从`pendingCommit`中取出`effects`，并对对应的DOM实施变更操作。
+
+注意到`commitAllWork()`是在循环外面调用的。`performUnitOfWork()`的任务完成后并没有对DOM进行变更，所以它是可以分开执行的。而`commitAllWork()`是会对DOM进行改变的，所以为了保证和UI显示一致，需要一次性将`commitAllWork()`执行完毕。
+
+说了这么多，我们依然不知道`nextUnitOfWork`来自于哪里。
