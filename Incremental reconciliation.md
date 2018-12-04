@@ -220,7 +220,7 @@ function workLoop(deadline){
 
 注意到`commitAllWork()`是在循环外面调用的。`performUnitOfWork()`的任务完成后并没有对DOM进行变更，所以它是可以分开执行的。而`commitAllWork()`是会对DOM进行改变的，所以为了保证和UI显示一致，需要一次性将`commitAllWork()`执行完毕。
 
-说了这么多，我们依然不知道`nextUnitOfWork`来自于哪里。
+说了这么多，我们依然不知道第一个`nextUnitOfWork`来自于哪里。
 
 ![resetUnitOfWork()](./img/201812042140.png)
 
@@ -258,8 +258,12 @@ function getRoot(fiber){
 }
 ```
 
-首先，`resetNextUnitOfWork()`会从`updateQueue`中取出一个更新操作，如果这个更新操作携带有`partialState`信息，那么将该信息复制到此次更新对应实例的fiber上，这样在稍后调用组件的`render()`方法时能用的上。
+首先，`resetNextUnitOfWork()`会从`updateQueue`尾部取出一个更新操作，如果这个更新操作携带有`partialState`信息，那么将该信息复制到此次更新对应实例的fiber上，这样在稍后调用组件的`render()`方法时能用的上。
 
-接下来是寻找old fiber tree的根节点。如果此次更新是整个应用第一次调用`render()`引起的，则不存在根fiber节点，所以`root = null`；如果此次更新是由非第一次调用`render()`方法引起的，我们则可以通过DOM节点的`__rootContainerFiber`属性找到根fiber节点；如果此次更新是由`setState()`引起的，则需要从当前fiber网上查找，知道找到没有`parent`属性那个fiber节点，即为根fiber节点。
+接下来是寻找old fiber tree的根节点。如果此次更新是整个应用第一次调用`render()`（第一次渲染，严格的说不是更新了，应该叫挂载）引起的，则不存在根fiber节点，所以`root = null`；如果此次更新是由非第一次调用`render()`方法引起的，我们则可以通过DOM节点的`__rootContainerFiber`属性找到根fiber节点；如果此次更新是由`setState()`引起的，则需要从当前fiber网上查找，知道找到没有`parent`属性那个fiber节点，即为根fiber节点。
 
-找完根fiber节点后，我们给`nextUnitOfWork`赋值一个新的fiber。这个fiber是一颗新work-in-progress tree的根fiber节点。
+找完根fiber节点后，我们给`nextUnitOfWork`赋值一个新的fiber。这个fiber是一颗新work-in-progress tree的根fiber节点（因为是第一个`nextUnitOfWork`，所以是根fiber节点）。
+
+如果不存在old root，则`stateNode`就是传入`render()`方法的那个DOM节点，`props`是来自于此次更新的`newProps`，`newProps`的`children`属性含有的其他元素也会被传入到`render()`方法中。`alternate`属性将会是`null`。
+
+如果存在old root，则`stateNode`就是上一次渲染的根DOM节点，`props`同样会从`newProps`取值，如果`newProps`为`null`的话，则从old root上取值。`alternate`指向的就是old root。
