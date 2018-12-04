@@ -62,7 +62,7 @@ function performWork(deadline){
 
 ####The fiber data structure
 
-每个组件我们都会为其创建一个fiber。`nextUnitOfWork`指向的是下一次我们要运行的fiber。`performUnitOfWork`会执行当前的fiber在执行结束后返回一个新的fiber。跟紧我，接下来我将详细解释一下。
+每个组件我们都会为其创建一个fiber。`nextUnitOfWork`指向的是下一次我们要运行的fiber。`performUnitOfWork`会执行当前的fiber并在执行结束后返回一个新的fiber。跟紧我，接下来我将详细解释一下。
 
 先来看下一个fiber的结构：
 
@@ -84,7 +84,7 @@ let fiber = {
 
 看起来只是一个很普通的JS对象。
 
-`parent`，`child`以及`sibling`将被用来构建一颗描述组件树的fiber树。`stateNode`则是指向一个DOM元素或者是用户定义的组件的实例。
+`parent`，`child`以及`sibling`将被用来构建一颗描述组件的fiber树。`stateNode`则是指向一个DOM元素或者是用户定义的组件的实例。
 
 ![变量说明](.\img\201812031109.png)
 
@@ -106,7 +106,7 @@ work-in-progress tree不会和old tree共享fiber。一旦work-in-progress tree�
 
 ####Didact call hierarchy
 
-我们来通过流程图来感知一下我们即将要写的代码的工作流程：
+我们来通过流程图来感知一下即将要写的代码的层次结构：
 
 ![fiber流程](./img/201812038046.png)
 
@@ -175,11 +175,11 @@ function scheduleUpdate(instance, partialState){
         instance: instance,
         partialState: partialState
     });
-    requestIdleCallback(performWork);
+    requestIdleCallback(performWork); // 延迟调用performWork
 }
 ```
 
-我们把要实施的更新放置到`updateQueue`数组中，每次调用`render()`或者`scheduleUpdate()`方法都会往`updateQueue`中增加一个更新操作。每个更新操作携带的信息都不尽相同，我们将会在接下来的`resetNextUnitOfWork()`方法看到如何去实施这些更新。
+`updateQueue`数组用来盛装要实施的更新，每次调用`render()`或者`scheduleUpdate()`方法都会往`updateQueue`中增加一个更新操作。每个更新操作携带的信息都不尽相同，我们将会在接下来的`resetNextUnitOfWork()`方法看到如何去实施这些更新。
 
 在把更新放到队列中之后，我们对`performWork()`做了一个延迟调用。
 
@@ -208,16 +208,58 @@ function workLoop(deadline){
 }
 ```
 
-`requestIdleCallback()`方法会将一个deadline传入目标方法（就是`performWork`）中，并执行这个方法。`performWork()`会将接收到的deadline传递给`workLoop()`方法，`workLoop()`执行结束后，`performWork()`中剩下的代码还会检查是否还有等待完成的任务，如果有，则还会再继续调用自己（会延迟调用自己，就是说在浏览器空闲的时候调用）。
+`requestIdleCallback()`方法会将一个deadline传入目标方法（就是`performWork`）中，并执行这个方法。`performWork()`会将接收到的deadline传递给`workLoop()`方法，`workLoop()`执行结束后，`performWork()`中剩下的代码还会检查是否还有等待完成的任务，如果有，则会在浏览器空闲的时候再次调用自己。
 
 `workLoop()`会监视着deadline参数，如果deadline太短，方法内部会自动停止循环，并保持nextUnitOfWork不做改变，下次会继续执行这个任务。
 
 >  ENOUGH_TIME是一个代表1ms的常量，通过`deadline.timeRemaining()`与ENOUGH_TIME的比较来判断是否有足够的时间来执行当前这个任务。如果`performUnitOfWork()`所需要的时间超过ENOUGH_TIME，我们会适当增加deadline的值。deadline只是浏览器所建议的一个时间，所以增加几毫秒时没有什么问题的。
 
-`performUnitOfWork()`会为当前的更新操作构建一颗work-in-progress tree，并会比较出需要对DOM实施的变化。这些操作都是逐渐进行的，每次构建一个fiber节点。
+`performUnitOfWork()`会为当前的更新操作构建一颗work-in-progress tree，并会比较出需要对DOM实施的变更。这些操作都是逐步进行的，每次构建一个fiber节点。
 
-当`performUnitOfWork()`结束了当前更新所需要做的任务之后，会返回null并将要实施的更新操作保存在`pendingCommit`变量中。最后，`commitAllWork()`会从`pendingCommit`中取出`effects`，并对对应的DOM实施变更操作。
+当`performUnitOfWork()`结束了当前更新所需要做的任务之后，会返回null（这样循环就结束了）并将要实施的更新操作保存在`pendingCommit`变量中。最后，`commitAllWork()`会从`pendingCommit`中取出`effects`，并对对应的DOM实施变更操作。
 
 注意到`commitAllWork()`是在循环外面调用的。`performUnitOfWork()`的任务完成后并没有对DOM进行变更，所以它是可以分开执行的。而`commitAllWork()`是会对DOM进行改变的，所以为了保证和UI显示一致，需要一次性将`commitAllWork()`执行完毕。
 
 说了这么多，我们依然不知道`nextUnitOfWork`来自于哪里。
+
+![resetUnitOfWork()](./img/201812042140.png)
+
+`resetUnitOfWork()`方法会接收一个更新操作并将其转化为`nextUnitOfWork`。
+
+```javascript
+function resetNextUnitOfWork(){
+    const update = updateQueue.shift();
+    if(!update){
+        return;
+    }
+    // 将更新操作中携带的state复制给对应fiber
+    if(update.partialState){
+        update.instance.__fiber.partialState = update.partialState;
+    }
+    
+    const root = update.from == HOST_ROOT
+    	? update.dom.__rootContainerFiber
+    	: getRoot(update.instance.__fiber);
+    
+    nextUnitOfWork = {
+        tag: HOST_ROOT,
+        stateNode: update.dom || root.stateNode,
+        props: update.newProps || root.props;
+        alternate: root
+    };
+}
+
+function getRoot(fiber){
+    let node = fiber;
+    while(node.parent){
+        node = node.parent;
+    }
+    return node;
+}
+```
+
+首先，`resetNextUnitOfWork()`会从`updateQueue`中取出一个更新操作，如果这个更新操作携带有`partialState`信息，那么将该信息复制到此次更新对应实例的fiber上，这样在稍后调用组件的`render()`方法时能用的上。
+
+接下来是寻找old fiber tree的根节点。如果此次更新是整个应用第一次调用`render()`引起的，则不存在根fiber节点，所以`root = null`；如果此次更新是由非第一次调用`render()`方法引起的，我们则可以通过DOM节点的`__rootContainerFiber`属性找到根fiber节点；如果此次更新是由`setState()`引起的，则需要从当前fiber网上查找，知道找到没有`parent`属性那个fiber节点，即为根fiber节点。
+
+找完根fiber节点后，我们给`nextUnitOfWork`赋值一个新的fiber。这个fiber是一颗新work-in-progress tree的根fiber节点。
