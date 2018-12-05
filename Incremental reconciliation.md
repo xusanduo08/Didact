@@ -10,7 +10,7 @@ React16已经发布了，其内部重写了很多代码，内部结构也发生�
 
 
 
-好了，先来解释下以前的代码为什么需要重写代码。
+好了，先来解释下以前的代码为什么需要重。
 
 #### Why Fiber
 
@@ -258,12 +258,12 @@ function getRoot(fiber){
 }
 ```
 
-首先，`resetNextUnitOfWork()`会从`updateQueue`尾部取出一个更新操作，如果这个更新操作携带有`partialState`信息，那么将该信息复制到此次更新对应实例的fiber上，这样在稍后调用组件的`render()`方法时能用的上。
+首先，`resetNextUnitOfWork()`会从`updateQueue`头部取出一个更新操作，如果这个更新操作携带有`partialState`信息，那么将该信息复制到此次更新对应实例的fiber上，在稍后调用组件的`render()`方法时会用到这个`partialState`。
 
 接下来是寻找old fiber tree的根节点。如果此次更新是整个应用第一次调用`render()`（第一次渲染，严格的说不是更新了，应该叫挂载）引起的，则不存在根fiber节点，所以`root = null`；如果此次更新是由非第一次调用`render()`方法引起的，我们则可以通过DOM节点的`__rootContainerFiber`属性找到根fiber节点；如果此次更新是由`setState()`引起的，则需要从当前fiber网上查找，知道找到没有`parent`属性那个fiber节点，即为根fiber节点。
 
-找完根fiber节点后，我们给`nextUnitOfWork`赋值一个新的fiber。这个fiber是一颗新work-in-progress tree的根fiber节点（因为是第一个`nextUnitOfWork`，所以是根fiber节点）。
+找完根fiber节点后，我们给`nextUnitOfWork`赋值一个新的fiber。__这个fiber是一棵新work-in-progress tree的根fiber节点__（因为是本次渲染的第一个`nextUnitOfWork`，所以是根fiber节点）。
 
-如果不存在old root，则`stateNode`就是传入`render()`方法的那个DOM节点，`props`是来自于此次更新的`newProps`，`newProps`的`children`属性含有的其他元素也会被传入到`render()`方法中。`alternate`属性将会是`null`。
+如果不存在old root（说明这是初次渲染），则`stateNode`就是传入`render()`方法的那个DOM节点，`props`是来自于此次渲染的`newProps`，`newProps`的`children`数组含有的其他元素也会被传入到`render()`方法中。`alternate`属性将会是`null`。
 
-如果存在old root，则`stateNode`就是上一次渲染的根DOM节点，`props`同样会从`newProps`取值，如果`newProps`为`null`的话，则从old root上取值。`alternate`指向的就是old root。
+如果存在old root（说明是更新操作，增量渲染），则`stateNode`就是上一次渲染的根DOM节点，`props`同样会从`newProps`取值，如果`newProps`为`null`的话，则从old root上取值。`alternate`指向的就是old root。
