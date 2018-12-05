@@ -64,7 +64,7 @@ function performWork(deadline){
 
 每个组件我们都会为其创建一个fiber。`nextUnitOfWork`指向的是下一次我们要运行的fiber。`performUnitOfWork`会执行当前的fiber并在执行结束后返回一个新的fiber。跟紧我，接下来我将详细解释一下。
 
-先来看下一个fiber的结构：
+先来看下fiber的结构：
 
 ```javascript
 let fiber = {
@@ -295,11 +295,21 @@ function performUnitOfWork(wipFiber){
 
 `beginWork()`用来根据入参创建当前已有fiber的一个子fiber节点，然后将该节点返回作为下一个`nextUnitOfWork`参数。
 
-如果当前已有fiber不存在子节点，则调用`completeWork()`方法并返回其兄弟节点作为下一个`nextUnitOfWork`参数。
+如果当前已有fiber不存在子节点，则执行`completeWork()`方法，然后返回其兄弟节点作为下一个`nextUnitOfWork`参数。
 
-如果当前fiber也不存在兄弟节点，则向上查找，并逐层调用`completeWork`方法，直到找到兄弟节点并返回或者到达根节点。
+如果当前fiber连兄弟节点也不存在，则向上查找，并逐层调用`completeWork`方法，直到找到并返回兄弟节点或者到达根节点。
 
 `performUnitOfWork()`会被多次调用以来创建fiber树。
 
-我们会以深度优先的原则去创一棵fiber树。从根节点开始，遍历每个节点的第一个子fiber（child属性），当到达某一个fiber节点时，我们会将该节点作为入参去调用`performUnitOfWork()`；不含有子节点时，则往右移动找寻兄弟节点或者祖先元素的兄弟节点，然后继续以深度优先的原则去遍历和创建fiber节点，整个过程会调用`performUnitOfWork`多次，直到整棵树创建完毕。（可以在这里[fiber-debugger](https://fiber-debugger.surge.sh/)查看更生动的描述）
+我们会以深度优先的原则去创一棵fiber树。从根节点开始，遍历每个节点的第一个子fiber（child属性），当到达某一个fiber节点时，我们会将该节点作为入参去调用`performUnitOfWork()`；如果某一fiber节点不含有子节点，则往右移动找寻兄弟节点，如果不存在兄弟节点则往上寻找祖先元素的兄弟节点，再将兄弟节点带入到`performUnitOfWork()`中执行。然后以当前节点为起点，继续按照深度优先的原则去遍历和创建fiber节点，整个过程会调用`performUnitOfWork`多次，直到整棵树创建完毕。（可以在这里[fiber-debugger](https://fiber-debugger.surge.sh/)查看更生动的描述）
+
+![beginWork&updateHostComponent&updateClassComponent](./img/201812052125.png)
+
+```
+function beginWork(wipFiber){
+    if(wipFiber.tag == CLASS_COMPONENT){
+        updateClassComponent(wipFiber)
+    }
+}
+```
 
