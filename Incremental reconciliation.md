@@ -260,10 +260,46 @@ function getRoot(fiber){
 
 首先，`resetNextUnitOfWork()`会从`updateQueue`头部取出一个更新操作，如果这个更新操作携带有`partialState`信息，那么将该信息复制到此次更新对应实例的fiber上，在稍后调用组件的`render()`方法时会用到这个`partialState`。
 
-接下来是寻找old fiber tree的根节点。如果此次更新是整个应用第一次调用`render()`（第一次渲染，严格的说不是更新了，应该叫挂载）引起的，则不存在根fiber节点，所以`root = null`；如果此次更新是由非第一次调用`render()`方法引起的，我们则可以通过DOM节点的`__rootContainerFiber`属性找到根fiber节点；如果此次更新是由`setState()`引起的，则需要从当前fiber网上查找，知道找到没有`parent`属性那个fiber节点，即为根fiber节点。
+接下来是寻找old fiber tree的根节点。如果此次更新是整个应用第一次调用`render()`（第一次渲染，严格的说不是更新了，应该叫挂载）引起的，则不存在根fiber节点，所以`root = null`；如果此次更新是由非第一次调用`render()`方法引起的，我们则可以通过DOM节点的`__rootContainerFiber`属性找到根fiber节点；如果此次更新是由`setState()`引起的，则需要从当前fiber往上查找，直到找到没有`parent`属性那个fiber节点，即为根fiber节点。
 
 找完根fiber节点后，我们给`nextUnitOfWork`赋值一个新的fiber。__这个fiber是一棵新work-in-progress tree的根fiber节点__（因为是本次渲染的第一个`nextUnitOfWork`，所以是根fiber节点）。
 
 如果不存在old root（说明这是初次渲染），则`stateNode`就是传入`render()`方法的那个DOM节点，`props`是来自于此次渲染的`newProps`，`newProps`的`children`数组含有的其他元素也会被传入到`render()`方法中。`alternate`属性将会是`null`。
 
 如果存在old root（说明是更新操作，增量渲染），则`stateNode`就是上一次渲染的根DOM节点，`props`同样会从`newProps`取值，如果`newProps`为`null`的话，则从old root上取值。`alternate`指向的就是old root。
+
+现在已经有了work-in-progress tree个根fiber节点，接下来我们从这个根节点开始构建work-in-progress fiber tree。
+
+![performUnitOfWork](./img/201812051509.png)
+
+```javascript
+function performUnitOfWork(wipFiber){
+    beginWork(wipFiber);
+    if(wipFiber.child){
+        return wipFiber.child;
+    }
+    
+    // 如果没有子元素，则寻找兄弟元素
+    let uow = wipFiber;
+    while(uow){
+        completeWork(uow);
+        if(uow.sibling){
+            return uow.sibling； // 返回找到的兄弟元素，构建一个节点。
+        }
+        uow = uow.parent;
+    }
+}
+```
+
+`performUnitOfWork()`方法会贯穿于整棵fiber树的构建过程。
+
+`beginWork()`用来根据入参创建当前已有fiber的一个子fiber节点，然后将该节点返回作为下一个`nextUnitOfWork`参数。
+
+如果当前已有fiber不存在子节点，则调用`completeWork()`方法并返回其兄弟节点作为下一个`nextUnitOfWork`参数。
+
+如果当前fiber也不存在兄弟节点，则向上查找，并逐层调用`completeWork`方法，直到找到兄弟节点并返回或者到达根节点。
+
+`performUnitOfWork()`会被多次调用以来创建fiber树。
+
+我们会以深度优先的原则去创一棵fiber树。从根节点开始，遍历每个节点的第一个子fiber（child属性），当到达某一个fiber节点时，我们会将该节点作为入参去调用`performUnitOfWork()`；不含有子节点时，则往右移动找寻兄弟节点或者祖先元素的兄弟节点，然后继续以深度优先的原则去遍历和创建fiber节点，整个过程会调用`performUnitOfWork`多次，直到整棵树创建完毕。（可以在这里[fiber-debugger](https://fiber-debugger.surge.sh/)查看更生动的描述）
+
