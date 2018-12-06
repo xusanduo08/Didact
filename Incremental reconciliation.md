@@ -10,7 +10,7 @@ React16已经发布了，其内部重写了很多代码，内部结构也发生�
 
 
 
-好了，先来解释下以前的代码为什么需要重。
+好了，先来解释下以前的代码为什么需要重写。
 
 #### Why Fiber
 
@@ -241,6 +241,7 @@ function resetNextUnitOfWork(){
     	? update.dom.__rootContainerFiber
     	: getRoot(update.instance.__fiber);
     
+    // 注意看，这时候的fiber都是没有child属性的。
     nextUnitOfWork = {
         tag: HOST_ROOT,
         stateNode: update.dom || root.stateNode,
@@ -293,7 +294,7 @@ function performUnitOfWork(wipFiber){
 
 `performUnitOfWork()`方法会贯穿于整棵fiber树的构建过程。
 
-`beginWork()`用来根据入参创建当前已有fiber的一个子fiber节点，然后将该节点返回作为下一个`nextUnitOfWork`参数。
+`beginWork()`用来为传入的fiber创建子fiber节点，然后将第一个子fiber节点返回作为下一个`nextUnitOfWork`参数。
 
 如果当前已有fiber不存在子节点，则执行`completeWork()`方法，然后返回其兄弟节点作为下一个`nextUnitOfWork`参数。
 
