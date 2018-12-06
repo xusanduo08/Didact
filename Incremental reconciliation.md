@@ -300,7 +300,7 @@ function performUnitOfWork(wipFiber){
 
 如果当前fiber连兄弟节点也不存在，则向上查找，并逐层调用`completeWork`方法，直到找到并返回兄弟节点或者到达根节点。
 
-`performUnitOfWork()`会被多次调用以来创建fiber树。
+fiber树的创建过程中，`performUnitOfWork()`会被调用多次。
 
 我们会以深度优先的原则去创一棵fiber树。从根节点开始，遍历每个节点的第一个子fiber（child属性），当到达某一个fiber节点时，我们会将该节点作为入参去调用`performUnitOfWork()`；如果某一fiber节点不含有子节点，则往右移动找寻兄弟节点，如果不存在兄弟节点则往上寻找祖先元素的兄弟节点，再将兄弟节点带入到`performUnitOfWork()`中执行。然后以当前节点为起点，继续按照深度优先的原则去遍历和创建fiber节点，整个过程会调用`performUnitOfWork`多次，直到整棵树创建完毕。（可以在这里[fiber-debugger](https://fiber-debugger.surge.sh/)查看更生动的描述）
 
@@ -354,4 +354,20 @@ function updateClassComponent(wipFiber){
 传入`updateClassComponent()`方法的fiber如果没有实例的话，则方法内部首先会为其创建一个。创建出来的实例会被添加最新的 `props`和`state`属性，之后调用实例的`render()`方法来获取最新的子元素。如果传入进来的fiber有对应的实例，则说明不是一个新的节点。这时候如果fiber的props和实例的props相等，并且fiber上不带有`partialState`属性，则说明节点前后没有发生变化（相当于一个简易版的`shouldComponentUpdate()`），不需要重新渲染，直接克隆该节点到work-in-progress tree就可以了。
 
 现在我们有了子元素`newChildElements`，可以继续向下构建work-in-progress fiber tree了。
+
+![reconcileChildrenArray()](./img/201812062154.png)
+
+`reconcileChildrenArray()`是一个比较核心的代码，fiber树的构建以及要对DOM实施的变化都会在这个方法里面完成。
+
+```
+const PLACEMENT = 1;
+const DELETION = 2;
+const UPDATE = 3;
+
+function arrify(val){
+    return val == null ? null : Array.isArray(val) ? val : [val];
+}
+
+
+```
 
