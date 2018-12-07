@@ -351,7 +351,7 @@ function updateClassComponent(wipFiber){
 
 `updateHostComponent()`方法用来处理host components及root component两种类型组件。如果传入的fiber不含有`stateNode`，则方法会为其创建一个（只有一个节点且不含有子元素，更不会添加到页面上），然后方法会从fiber的`props`属性中取出`children`并传入`reconcileChildrenArray()`中去执行性。
 
-传入`updateClassComponent()`方法的fiber如果没有实例的话，则方法内部首先会为其创建一个。创建出来的实例会被添加最新的 `props`和`state`属性，之后调用实例的`render()`方法来获取最新的子元素。如果传入进来的fiber有对应的实例，则说明不是一个新的节点。这时候如果fiber的props和实例的props相等，并且fiber上不带有`partialState`属性，则说明节点前后没有发生变化（相当于一个简易版的`shouldComponentUpdate()`），不需要重新渲染，直接克隆该节点到work-in-progress tree就可以了。
+传入`updateClassComponent()`方法的fiber如果没有实例的话，则方法内部首先会通过调用组件的构建函数为其创建一个实例。创建出来的实例会被添加最新的 `props`和`state`属性，之后调用实例的`render()`方法来获取最新的子元素。如果传入进来的fiber有对应的实例，则说明不是一个新的节点。这时候如果fiber的props和实例的props相等，并且fiber上不带有`partialState`属性，则说明节点前后没有发生变化（相当于一个简易版的`shouldComponentUpdate()`），不需要重新渲染，直接克隆该节点到work-in-progress tree就可以了。
 
 现在我们有了子元素`newChildElements`，可以继续向下构建work-in-progress fiber tree了。
 
