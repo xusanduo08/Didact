@@ -359,7 +359,7 @@ function updateClassComponent(wipFiber){
 
 `reconcileChildrenArray()`是一个比较核心的代码，fiber树的构建以及要对DOM实施的变化都会在这个方法里面完成。
 
-```
+```javascript
 const PLACEMENT = 1;
 const DELETION = 2;
 const UPDATE = 3;
@@ -368,6 +368,74 @@ function arrify(val){
     return val == null ? null : Array.isArray(val) ? val : [val];
 }
 
+function reconcileChildArray(wipFiber, newChildElements){
+    const elements = arrify(newChildElements);
+    
+    let index = 0;
+    let oldFiber = wipFiber.alternate ? wipFiber.alternate.child : null;
+    let newFiber = null;
+    while(index < elements.length || oldFiber != null){
+        const prevFiber = newFiber;
+        const element = index < elements.length && elements[index];
+        const sameType = oldFiber && element && element.type == oldFiber.type;
+        
+        if(sameType){ // 如果前后fiber类型一样，说明是一个更新操作
+            newFiber = {
+                type: oldFiber.type,
+                tag: oldFiber.tag,
+                stateNode: oldFiber.stateNode,
+                props: element.props,
+                parent: wipFiber,
+                alternate: oldFiber,
+                partialState: oldFiber.partialState,
+                effectTag: UPDATE
+            };
+        }
+        
+        if(element && !sameType){
+            newFiber = {
+                type: element.type,
+                tag: 
+                	typeof element.type === 'string' ?HOST_COMPPONENT: CLASS_COMPONENT,
+                props: element.props,
+                parent: wipFiber,
+                effectTag: PLACEMENT
+            };
+        }
+        
+        if(oldFiber && !sameType){
+            oldFiber.effectTag = DELETION;
+            wipFiber.effects = wipFiber.effects || [];
+            wipFiber.effects.push(oldFiber);
+        }
+        
+        if(oldFiber){
+            oldFiber = oldFiber.sibling;
+        }
+        
+        if(index == 0){
+            wipFiber.child = newFiber; // fiber的child属性指向的是第一个子fiber
+        } else if(prevFiber && element){
+            prevFiber.sibling = newFiber; // 剩下的子fiber相互之间通过sibling属性关联
+        }
+        
+        index++;
+    }
+}
 
 ```
+
+一开始我们要确保传入的`newChildElements`是个数组。（这和我们之前写的一致性校验的算法有些不同，之前的`render()`方法返回的是一个对象，不支持数组，现在这个是子元素全部放在数组中，也就是说我们可以在组件的`render()`方法中直接返回一个数组了）。
+
+接下来将`wipFiber.alernate`（即old fiber tree）的子节点与`wipFiber.props.children`对应的元素或者执行`wipFiber.stateNode.render()`后返回的元素进行比较。（fiber节点与元素进行比较，这地方的元素就是用对象表示的JSX）
+
+在比较时，是`oldFiber`-`element`成对的比较。先是第一个fiber子节点（`oldFiber = wipFiber.alternate.child`）与第一个子元素（`elements[0]`）比较，比较结束后，`oldFiber`赋值为其自身的兄弟节点（`oldFiber = oldFiber.sibling`），然后继续与第二个子元素比较（`elements[1]`）。比较后结束再次执行`oldFiber = oldFiber.sibling`，然后再将`oldFiber`与`elements[2]`比较。以此方式比较下去：
+
+* 如果`oldFiber`和对应的`element`有相同的`type`，则代表`oldFiber.stateNode`可以被重用，我们会基于`oldFiber`来创建一个新的fiber，并将新fiber的`effectTag`属性设置为`UPDATE`，然后将这个新的fiber添加到work-in-progress tree上。
+* 如果`element`与对应的`oldFiber`的`type`属性值不一样，或者说当前的`element`没有对应的`oldFiber`（新增元素的情况），我们会根据`element`上含有的信息新建一个fiber。注意，这个新建的fiber没有`alternate`属性，也没有`stateNode`属性（`stateNode`属性会在`beginWork()`中被创建）。我们会为将这个新建fiber的`effectTag`设置为`PLACEMENT`。
+* 如果`element`与对应的`oldFiber`的`type`属性值不一样，或者`oldFiber`没有对应的`element`（说明有元素需要被删除），我们会将`oldFiber`的`effectTag`设置为`DELETION`。由于`oldFiber`并不是work-in-progress tree的一部，我们需要将其添加到`wipFiber.effects`列表中以防止丢失。
+
+_我们并没有像React那样使用key属性来做一致性校验，如果子元素只是换了一个位置的话，我们的代码并不会做特殊处理。_
+
+
 
