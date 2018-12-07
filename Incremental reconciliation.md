@@ -437,5 +437,38 @@ function reconcileChildArray(wipFiber, newChildElements){
 
 _我们并没有像React那样使用key属性来做一致性校验，如果子元素只是换了一个位置的话，我们的代码并不会做特殊处理。_
 
+![cloneChildFibers()](./img/201812071640.png)
 
+`updateClassComponent()`方法中考虑了一种特殊的情况，当某个节点不需要更新时，可以直接将对应old filber tree上的节点拷贝到work-in-progress tree上，而不用再做一致性校验。
+
+```javascript
+function cloneChildFibers(parentFiber){
+    const oldFiber = parentFiber.alternate;
+    if(!oldFiber.child){
+        return;
+    }
+    
+    let oldChild = oldFiber.child;
+    let prevChild = null;
+    while(oldChild){ // 循环拷贝子元素
+        const newChild = {
+            type: oldChild.type,
+            tag: oldChild.tag,
+            stateNode: oldChild.stateNode,
+            props: oldChild.props,
+            partialState: oldChild.partialState,
+            alternate: oldChild,
+            parent: parentFiber
+        };
+        if(prevChild){
+            prevChild.sibling = newChild;
+        } else {
+            parentFiber.child = newChild;
+        }
+        
+        prevChild = newChild;
+        oldChild = oldChild.sibling;
+    }
+}
+```
 
