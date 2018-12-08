@@ -439,11 +439,11 @@ _我们并没有像React那样使用key属性来做一致性校验，如果子�
 
 ![cloneChildFibers()](./img/201812071640.png)
 
-`updateClassComponent()`方法中考虑了一种特殊的情况，当某个节点不需要更新时，可以直接将对应old filber tree上的节点拷贝到work-in-progress tree上，而不用再做一致性校验。
+`updateClassComponent()`方法中考虑了一种特殊的情况，当某个节点不需要更新时，可以直接将对应old filber tree上的节点拷贝到work-in-progress tree上，省去了一致性校验的过程。
 
 ```javascript
 function cloneChildFibers(parentFiber){
-    const oldFiber = parentFiber.alternate;
+    const oldFiber = parentFiber.alternate; // 获取传入的fiber对应的oldFiber
     if(!oldFiber.child){
         return;
     }
@@ -467,8 +467,10 @@ function cloneChildFibers(parentFiber){
         }
         
         prevChild = newChild;
-        oldChild = oldChild.sibling;
+        oldChild = oldChild.sibling; //  通过sibling（兄弟）关系循环所有子元素
     }
 }
 ```
+
+`cloneChildFibers()`会克隆传入的`wipFiber.alternate`指向的fiber的所有子元素，并将它们添加到work-in-progress tree上。因为确定这些节点没有发生什么变化，所以并不需要添加`effectTag`属性。
 
