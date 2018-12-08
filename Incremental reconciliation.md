@@ -500,3 +500,69 @@ funcion completeWork(fiber){
 接下来，方法内部会构建一个`effcts`列表，这个列表会将work-in-progres sub-tree上含有`effectTag`属性的fiber都包含在内（old sub-tree上含有`DELETION effectTag`的fiber也会被包含在这个effects列表中）。通过这样的`effects`列表，根fiber的`efffects`会包含所有带有`effectTag`的fiber。
 
 最后，当fiber不含有`parent`属性时，说明我们已经到达了work-in-progress tree的根部，此时，我们已经完成了此次的更新操作所需要的工作，并收集了所有的effects。接下来，我们将根节点赋值给`pendingCommit`，然后`workLoop()`会去调用`commmitAllWork()`来完成更新。
+
+![commitAllWork&commitWork](./img/201812081608.png)
+
+接下来就剩一件事了，将更新实施到DOM上。
+
+```javascript
+function commitAllWork(fiber){
+    fiber.effects.forEach(f => {
+        commitWork(f);
+    })
+    // 根fiber节点对应的DOM节点有个__rootContainerFiber属性引用着根fiber
+    fiber.stateNode.__rootContainerFiber = fiber;
+    nextUnitOfWork = null;
+    pendingCommit = null;
+}
+
+function commitWork(fiber){
+    if(fiber.tag == HOST_ROOT){
+        return;
+    }
+    
+    let domParentFiber = fiber.parent;
+    // 寻找一个dom类型的祖先fiber(stateNode属性对应为原生DOM)
+    while(domParentFiber.tag == CLASS_COMPONENT){
+        domParentFiber = domParentFiber.parent;
+    }
+    
+    const domParent = domParentFiber.stateNode;
+    
+    if(fiber.effectTag == PLACEMENT && fiber.tag = HOST_COMPONENT){ // 添加一个DOM
+        domParent.appendChild(fiber.stateNode);
+    } else if(fiber.effectTag == UPDATE){ // 更新一个DOM
+        updateDomProperties(fiber.stateNode, fiber.alternate.props, fiber.props);
+    } else if(fiber.effectTag == DELETION){
+        commitDeletion(fiber, domParent);
+    }
+}
+
+function commitDeletion(fiber, domParent){
+    let node =fiber;
+    while(true){
+        if(node.tag == CLASS_COMPONENT){
+            node = node.child;
+            continue;
+        }
+        domParent.removeChild(node.stateNode);
+        // 如果node不等于fiber，并且没有兄弟节点，说明已经删除完毕
+        while(node != fiber && !node.sibling){
+            node = node.parent; // 删除完毕后node重置为刚开始的值
+        }
+        if(node == fiber){
+            return;
+        }
+        node = node.sibling;
+    }
+
+}
+```
+
+`commitAllWork()`会循环根fiber上的`effects`数组，针对每个元素都会去调用`commitWork()`方法。`commitWork`会检查每个fiber的`effectTag`属性：
+
+* `effectTag:PLACEMENT`：先找到父DOM节点，然后直接将fiber的`stateNode`属性对应的DOM节点直接append到父DOM节点下。
+* `effectTag:UPDATE`：将`stateNode`及其对应的新旧props传入`updateDomProperties`中，方法内部再去对节点进行更新。
+* `effectTag:DELETION`：如果当前的fiber是一个host component（`stateNode`属性为一个原生DOM节点），这种时候直接通过其父节点调用`removeChild()`方法来删除该节点。如果当前的fiber是一个class component，在进行删除之前，需要找到组件对应的sub fiber-tree上所有的host component，然后再进行删除。
+
+当当前的effects都被实施后，需要重置`nextUnitOfWork`和`pendingCommit`，work-in-progress tree也变成了old tree，所以我们会将它的根节点设置到`__rootContainerFiber`属性上。这些都做完后，当前的更新就都完成了，我们可以进行下一个了。
