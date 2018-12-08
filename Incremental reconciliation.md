@@ -283,7 +283,7 @@ function performUnitOfWork(wipFiber){
     // 如果没有子元素，则寻找兄弟元素
     let uow = wipFiber;
     while(uow){
-        completeWork(uow);
+        completeWork(uow); // 如果wipFiber没有子元素，或者当所有子节点都被处理完毕时会被调用
         if(uow.sibling){
             return uow.sibling； // 返回找到的兄弟元素，构建一个节点。
         }
@@ -474,3 +474,29 @@ function cloneChildFibers(parentFiber){
 
 `cloneChildFibers()`会克隆传入的`wipFiber.alternate`指向的fiber的所有子元素，并将它们添加到work-in-progress tree上。因为确定这些节点没有发生什么变化，所以并不需要添加`effectTag`属性。
 
+![completeWork()](./img/201812081525.png)
+
+再`performUnitOfWork()`中，当`wipFiber`没有子元素或者当所有子元素都被执行完毕后，我们就会调用`completeWork()`方法。
+
+```javascript
+funcion completeWork(fiber){
+    if(fiber.tag == CLASS_COMPONENT){ // 如果是一个类组件
+        fiber.stateNode.__fiber = fiber;
+    }
+    
+    if(fiber.parent){
+        const childEffects = fiber.effects || [];
+        const thisEffect = fiber.effectTag != null ? [fiber] : [];
+        const parentEffects = fiber.parent.effects || [];
+        fiber.parent.effects = parentEffects.concat(childEffects, thisEffect);
+    } else {
+        pendingCommit = fiber;
+    }
+}
+```
+
+`completeWork()`首先更新传入的fiber对应实例类组件对象的fiber引用（可能不一定非要在这个地方，但代码里需要这么几行代码）。
+
+接下来，方法内部会构建一个`effcts`列表，这个列表会将work-in-progres sub-tree上含有`effectTag`属性的fiber都包含在内（old sub-tree上含有`DELETION effectTag`的fiber也会被包含在这个effects列表中）。通过这样的`effects`列表，根fiber的`efffects`会包含所有带有`effectTag`的fiber。
+
+最后，当fiber不含有`parent`属性时，说明我们已经到达了work-in-progress tree的根部，此时，我们已经完成了此次的更新操作所需要的工作，并收集了所有的effects。接下来，我们将根节点赋值给`pendingCommit`，然后`workLoop()`会去调用`commmitAllWork()`来完成更新。
