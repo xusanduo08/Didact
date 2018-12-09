@@ -26,7 +26,7 @@ React16已经发布了，其内部重写了很多代码，内部结构也发生�
 
 #### Scheduling micro-tasks
 
-我们需要把任务分割成更细小的任务片，以单位任务片的方式来执行这些任务片，在执行的间隙，主线程可以去执行有更高优先级的其他任务，结束之后再回来继续执行剩余的任务片。
+我们需要把__任务__分割成更细小的__任务片__，以单位任务片的方式来执行这些任务，在执行的间隙，主线程可以去执行有更高优先级的其他任务，结束之后再回来继续执行剩余的任务片。
 
 我们将定义一个`requestIdleCallback()`方法来完成上述功能。这个方法会维护一个回调，这个回调是下次浏览器空闲时需要去执行的任务。在执行这个回调时还会传入一个`deadline`参数，用来描述当前有多少时间可以用来执行这个任务。
 
@@ -56,13 +56,13 @@ function performWork(deadline){
 }
 ```
 
-真正执行任务的是`performUnitOfWork`这个方法，我们的一致性校验算法也需要写到这个方法里面。这个方法会执行任务片并返回继续执行下次任务所需要的所有信息。
+真正执行任务的是`performUnitOfWork`这个方法，我们的一致性校验算法也需要写到这个方法里面。这个方法会执行任务片并返回下次需要执行的任务片。
 
 我们使用fiber来跟踪任务片的执行。
 
 ####The fiber data structure
 
-每个组件我们都会为其创建一个fiber。`nextUnitOfWork`指向的是下一次我们要运行的fiber。`performUnitOfWork`会执行当前的fiber并在执行结束后返回一个新的fiber。跟紧我，接下来我将详细解释一下。
+每个组件（__注意，这里的组件不仅是用户定义的组件，也代表浏览器原生的HTML标签__）我们都会为其创建一个fiber。`nextUnitOfWork`指向的是下一次我们要运行的fiber。`performUnitOfWork`会执行当前的fiber并在执行结束后返回一个新的fiber。跟紧我，接下来我将详细解释一下。
 
 先来看下fiber的结构：
 
@@ -84,7 +84,7 @@ let fiber = {
 
 看起来只是一个很普通的JS对象。
 
-`parent`，`child`以及`sibling`将被用来构建一颗描述组件的fiber树。`stateNode`则是指向一个DOM元素或者是用户定义的组件的实例。（__注意，这里的组件不仅是用户定义的组件，也代表浏览器原生的HTML标签__）
+`parent`，`child`以及`sibling`将被用来构建一颗描述组件的fiber树。`stateNode`指向一个DOM元素或者是用户定义的组件的实例。
 
 ![变量说明](.\img\201812031109.png)
 
@@ -92,15 +92,15 @@ let fiber = {
 
 * `b`，`p`及`i`这一类的fiber我们称为__host components__，用`tag:HOST_COMPONENT`来表示。这一类fiber的`type`属性值为一个字符串（即对应的html元素标签名）。`props`则放置着对应元素的属性和事件。
 * `Foo`对应的fiber我们称为__class components__，对应的`tag`标签值为`CLASS_COMPONENT`。这一类fiber的`type`属性值为指向用户定义的组件类的引用。
-* `div`对应的fiber我们称为__host root__。host root和host component都含有一个DOM元素作为`stateNode`的属性值，但host root作为fiber树的根，它将会受到一些特别的对待。我们使用`tag:HOST_ROOT`来区分host root。注意到，此类fiber的`stateNode`对应的DOM节点将会被传入到`Didact.render()`中。
+* `div`对应的fiber我们称为__host root__。host root和host component都含有一个DOM元素作为`stateNode`的属性值，但host root作为fiber树的根，将会受到一些特别的对待。我们使用`tag:HOST_ROOT`来区分host root。注意到，此类fiber的`stateNode`对应的DOM节点将会被传入到`Didact.render()`中。
 
-另一个比较重要的属性是`alternate`。大多数情况下我们代码中存在两棵fiber树：一颗对应着已经渲染到页面的DOM，我们称之为current tree或者old tree；另一颗为我们更新（调用`setState()`或者`Didact.render()`）过程中构建出来的树，我们称之为work-in-progress tree。（这两棵树的节点都是一个个fiber）
+另一个比较重要的属性是`alternate`。__大多数情况下我们代码中存在两棵fiber树：一颗对应着已经渲染到页面的DOM，我们称之为current tree或者old tree；另一颗为我们更新（调用`setState()`或者`Didact.render()`）过程中构建的树，我们称之为work-in-progress tree。__（这两棵树的节点都是一个个fiber）
 
-work-in-progress tree不会和old tree共享fiber。一旦work-in-progress tree执行结束，对应的DOM都被渲染完毕后，work-in-progress tree就会变成old tree。
+work-in-progress tree不会和old tree共享fiber。一旦work-in-progress tree构建结束，对应的DOM都被渲染完毕，work-in-progress tree就会变成old tree。
 
 `alternate`用来连接work-in-progress tree上的fiber对应的old tree上的fiber。一个fiber与它的`alternate`指向的old tree上的fiber拥有相同的`tag`，`type`和`stateNode`。当我们在渲染一个新的结构时，对应的fiber不会含有`alternate`属性。
 
-接下来是`effects`数组和`effectTag`。当work-in-progress tree上的某一个fiber需要对DOM做一些变更时，我们会给这个fiber设置`effecttTag`属性，取值有三种：`PLACEMENT`，`UPDATE`，或者`DELETION`。为了更方便的实施DOM的变更，我们将来自当前fiber下含有`effectTag`的子fiber都保存在`effects`数组中。
+接下来是`effects`数组和`effectTag`。当work-in-progress tree上的某一个fiber需要对DOM做一些变更时，我们会给这个fiber设置`effecttTag`属性，取值有三种：`PLACEMENT`，`UPDATE`，或者`DELETION`。为了更方便的实施DOM的变更，我们将当前fiber下含有`effectTag`的子fiber都保存在`effects`数组中。
 
 上面说了比较多的概念，一时理解有些困难，如果跟不上也不要担心，下面我们在实际代码中来了解一下fiber。
 
@@ -120,7 +120,7 @@ work-in-progress tree不会和old tree共享fiber。一旦work-in-progress tree�
 
 在[Instances, reconciliation and virtual DOM](https://engineering.hexacta.com/didact-instances-reconciliation-and-virtual-dom-9316d650f1d0)这一节我们写了`updateDomProperties()`方法用来更新DOM节点的属性。我们还写了`createDomElement()`方法用来创建DOM节点。这两个方法你都可以在[dom-utils.js](https://gist.github.com/pomber/c63bd22dbfa6c4af86ba2cae0a863064)中看到。
 
-在[Components and state](https://engineering.hexacta.com/didact-components-and-state-53ab4c900e37)这一节我们编写了`Component`基础类。这个类需要一些改动。`setState()`方法中需要去调用`scheduleUpdate()`方法。此外还要创建一个`createInstance`方法来代替之前的`createPublicInstance()`方法。`createInstance`创建的实例保存了自身对应的fiber的引用。
+在[Components and state](https://engineering.hexacta.com/didact-components-and-state-53ab4c900e37)这一节我们编写了`Component`基础类。这个类需要一些改动。`setState()`方法中需要去调用`scheduleUpdate()`方法。此外还要创建一个`createInstance`方法来代替之前的`createPublicInstance()`方法，`createInstance`创建的实例保存了自身对应的fiber的引用。
 
 ```javascript
 class Component{
@@ -147,7 +147,7 @@ function createInstance(fiber){
 
 除了`Component`类和`createElement()`方法外，我们还有两个暴露出来的方法：`render()`和`setState()`，并且我们知道我们将在`setState()`中调用`scheduleUpdate()`。
 
-`render()`方法和`scheduleUpdate()`方法有些类似，它们都会接收一个更新任务，然后放到队列中。
+`render()`方法和`scheduleUpdate()`方法有些类似，它们都会接收一个更新（本文提到的更新既包括页面的初次渲染，也包括字面意义上的更新）任务，然后放到队列中。
 
 ```javascript
 // Fiber tags
@@ -179,9 +179,9 @@ function scheduleUpdate(instance, partialState){
 }
 ```
 
-`updateQueue`数组用来盛装要实施的更新，每次调用`render()`或者`scheduleUpdate()`方法都会往`updateQueue`中增加一个更新操作。每个更新操作携带的信息都不尽相同，我们将会在接下来的`resetNextUnitOfWork()`方法看到如何去实施这些更新。
+`updateQueue`数组用来盛装要实施的更新，每次调用`render()`或者`scheduleUpdate()`方法都会往`updateQueue`中增加一个更新操作。每个更新操作携带的信息都不相同，我们将会在接下来的`resetNextUnitOfWork()`方法看到如何去实施这些更新。
 
-在把更新放到队列中之后，我们对`performWork()`做了一个延迟调用。
+在把更新放到队列中之后，我们对`performWork()`做了一个延迟调用（意思是在浏览器空闲的时候调用）。
 
 ![performWork()&workLoop()](./img/201812040958.png)
 
@@ -197,7 +197,7 @@ function performWork(deadline){
 
 function workLoop(deadline){
     if(!nextUnitOfWork){
-        resetNextUnitOfWork();
+        resetNextUnitOfWork(); // 产生第一个nextUnitOfWork
     }
     while(nextUnitOfWork && deadline.timeRemaining() > ENOUGH_TIME){
         nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
@@ -218,13 +218,13 @@ function workLoop(deadline){
 
 当`performUnitOfWork()`结束了当前更新所需要做的任务之后，会返回null（这样循环就结束了）并将要实施的更新操作保存在`pendingCommit`变量中。最后，`commitAllWork()`会从`pendingCommit`中取出`effects`，并对对应的DOM实施变更操作。
 
-注意到`commitAllWork()`是在循环外面调用的。`performUnitOfWork()`的任务完成后并没有对DOM进行变更，所以它是可以分开执行的。而`commitAllWork()`是会对DOM进行改变的，所以为了保证和UI显示一致，需要一次性将`commitAllWork()`执行完毕。
+注意到`commitAllWork()`是在循环外面调用的。`performUnitOfWork()`的任务完成后并没有对DOM进行变更（只是记录），所以它是可以分开执行的，而`commitAllWork()`是会对DOM进行改变的，所以为了保证代码和UI显示一致，需要一次性将`commitAllWork()`执行完毕。
 
 说了这么多，我们依然不知道第一个`nextUnitOfWork`来自于哪里。
 
 ![resetUnitOfWork()](./img/201812042140.png)
 
-`resetUnitOfWork()`方法会接收一个更新操作并将其转化为`nextUnitOfWork`。
+`resetUnitOfWork()`方法会接收一个更新操作并将其转化为`nextUnitOfWork`（其实就是根fiber）。
 
 ```javascript
 function resetNextUnitOfWork(){
@@ -259,15 +259,15 @@ function getRoot(fiber){
 }
 ```
 
-首先，`resetNextUnitOfWork()`会从`updateQueue`头部取出一个更新操作，如果这个更新操作携带有`partialState`信息，那么将该信息复制到此次更新对应实例的fiber上，在稍后调用组件的`render()`方法时会用到这个`partialState`。
+首先，`resetNextUnitOfWork()`会从`updateQueue`头部取出一个更新操作，如果这个更新操作携带有`partialState`信息，那么将该信息复制到此次更新对应组件实例的fiber上，在稍后调用组件的`render()`方法时会用到这个`partialState`。
 
-接下来是寻找old fiber tree的根节点。如果此次更新是整个应用第一次调用`render()`（第一次渲染，严格的说不是更新了，应该叫挂载）引起的，则不存在根fiber节点，所以`root = null`；如果此次更新是由非第一次调用`render()`方法引起的，我们则可以通过DOM节点的`__rootContainerFiber`属性找到根fiber节点；如果此次更新是由`setState()`引起的，则需要从当前fiber往上查找，直到找到没有`parent`属性那个fiber节点，即为根fiber节点。
+接下来是寻找old fiber tree的根节点。如果此次更新是整个应用第一次调用`render()`（第一次渲染）引起的，则不存在根fiber节点，所以`root = null`；如果此次更新是由非第一次调用`render()`方法引起的，我们则可以通过DOM节点的`__rootContainerFiber`属性找到根fiber节点；如果此次更新是由`setState()`引起的，则需要从当前fiber往上查找，直到找到没有`parent`属性那个fiber节点，即为根fiber节点。
 
 找完根fiber节点后，我们给`nextUnitOfWork`赋值一个新的fiber。__这个fiber是一棵新work-in-progress tree的根fiber节点__（因为是本次渲染的第一个`nextUnitOfWork`，所以是根fiber节点）。
 
-如果不存在old root（说明这是初次渲染），则`stateNode`就是传入`render()`方法的那个DOM节点，`props`是来自于此次渲染的`newProps`，`newProps`的`children`数组含有的其他元素也会被传入到`render()`方法中。`alternate`属性将会是`null`。
+如果不存在old root（说明这是初次渲染），则`stateNode`就是传入`render()`方法的那个DOM节点，`props`是来自于此次渲染的`newProps`，`newProps`的`children`数组含有的其他元素也会被传入到`render()`方法中。`alternate`属性将会是`null`（因为是初次渲染，不存在old tree）。
 
-如果存在old root（说明是更新操作，增量渲染），则`stateNode`就是上一次渲染的根DOM节点，`props`同样会从`newProps`取值，如果`newProps`为`null`的话，则从old root上取值。`alternate`指向的就是old root。
+如果存在old root（真正意义上的更新操作，增量渲染），则`stateNode`就是上一次渲染的根DOM节点，`props`同样会从`newProps`取值，如果`newProps`为`null`的话，则从old root上取值。`alternate`指向的就是old root。
 
 现在已经有了work-in-progress tree个根fiber节点，接下来我们从这个根节点开始构建work-in-progress fiber tree。
 
@@ -302,7 +302,7 @@ function performUnitOfWork(wipFiber){
 
 fiber树的创建过程中，`performUnitOfWork()`会被调用多次。
 
-我们会以深度优先的原则去创一棵fiber树。从根节点开始，遍历每个节点的第一个子fiber（child属性），当到达某一个fiber节点时，我们会将该节点作为入参去调用`performUnitOfWork()`；如果某一fiber节点不含有子节点，则往右移动找寻兄弟节点，如果不存在兄弟节点则往上寻找祖先元素的兄弟节点，再将兄弟节点带入到`performUnitOfWork()`中执行。然后以当前节点为起点，继续按照深度优先的原则去遍历和创建fiber节点，整个过程会调用`performUnitOfWork`多次，直到整棵树创建完毕。（可以在这里[fiber-debugger](https://fiber-debugger.surge.sh/)查看更生动的描述）
+我们会以深度优先的原则去创一棵fiber树。从根节点开始，遍历每个节点的第一个子fiber（即child属性所指向的对象），当到达某一个fiber节点时，我们会将该节点作为入参去调用`performUnitOfWork()`；如果某一fiber节点不含有子节点，则往右移动找寻兄弟节点，如果不存在兄弟节点则往上寻找祖先元素的兄弟节点，再将兄弟节点带入到`performUnitOfWork()`中执行。然后以当前节点为起点，继续按照深度优先的原则去遍历和创建fiber节点，整个过程会调用`performUnitOfWork()`多次，直到整棵树创建完毕。（可以在这里[fiber-debugger](https://fiber-debugger.surge.sh/)查看更生动的描述）
 
 ![beginWork&updateHostComponent&updateClassComponent](./img/201812052125.png)
 
@@ -406,7 +406,7 @@ function reconcileChildArray(wipFiber, newChildElements){
         if(oldFiber && !sameType){
             oldFiber.effectTag = DELETION;
             wipFiber.effects = wipFiber.effects || [];
-            wipFiber.effects.push(oldFiber);
+            wipFiber.effects.push(oldFiber); // 记录oldFiber的删除操作
         }
         
         if(oldFiber){
@@ -429,10 +429,10 @@ function reconcileChildArray(wipFiber, newChildElements){
 
 接下来将`wipFiber.alernate`（即old fiber tree）的子节点与`wipFiber.props.children`对应的元素或者执行`wipFiber.stateNode.render()`后返回的元素进行比较。（fiber节点与元素进行比较，这地方的元素就是用对象表示的JSX）
 
-在比较时，是`oldFiber`-`element`成对的比较。先是第一个fiber子节点（`oldFiber = wipFiber.alternate.child`）与第一个子元素（`elements[0]`）比较，比较结束后，`oldFiber`赋值为其自身的兄弟节点（`oldFiber = oldFiber.sibling`），然后继续与第二个子元素比较（`elements[1]`）。比较后结束再次执行`oldFiber = oldFiber.sibling`，然后再将`oldFiber`与`elements[2]`比较。以此方式比较下去：
+在比较时，是`oldFiber`-`element`成对的比较。先是第一个fiber子节点（`oldFiber = wipFiber.alternate.child`）与第一个子元素（`elements[0]`）比较，比较结束后，`oldFiber`赋值为其自身的兄弟节点（`oldFiber = oldFiber.sibling`），然后继续与第二个子元素比较（`elements[1]`）。比较结束后再次执行`oldFiber = oldFiber.sibling`，然后再将`oldFiber`与`elements[2]`比较。以此方式比较下去：
 
 * 如果`oldFiber`和对应的`element`有相同的`type`，则代表`oldFiber.stateNode`可以被重用，我们会基于`oldFiber`来创建一个新的fiber，并将新fiber的`effectTag`属性设置为`UPDATE`，然后将这个新的fiber添加到work-in-progress tree上。
-* 如果`element`与对应的`oldFiber`的`type`属性值不一样，或者说当前的`element`没有对应的`oldFiber`（新增元素的情况），我们会根据`element`上含有的信息新建一个fiber。注意，这个新建的fiber没有`alternate`属性，也没有`stateNode`属性（`stateNode`属性会在`beginWork()`中被创建）。我们会为将这个新建fiber的`effectTag`设置为`PLACEMENT`。
+* 如果`element`与对应的`oldFiber`的`type`属性值不一样，或者说当前的`element`没有对应的`oldFiber`（新增元素的情况），我们会根据`element`上含有的信息新建一个fiber。注意，这个新建的fiber没有`alternate`属性，也没有`stateNode`属性（`stateNode`属性会在`beginWork()`中被创建）。我们会将这个新建fiber的`effectTag`设置为`PLACEMENT`。
 * 如果`element`与对应的`oldFiber`的`type`属性值不一样，或者`oldFiber`没有对应的`element`（说明有元素需要被删除），我们会将`oldFiber`的`effectTag`设置为`DELETION`。由于`oldFiber`并不是work-in-progress tree的一部，我们需要将其添加到`wipFiber.effects`列表中以防止丢失。
 
 _我们并没有像React那样使用key属性来做一致性校验，如果子元素只是换了一个位置的话，我们的代码并不会做特殊处理。_
@@ -476,10 +476,10 @@ function cloneChildFibers(parentFiber){
 
 ![completeWork()](./img/201812081525.png)
 
-再`performUnitOfWork()`中，当`wipFiber`没有子元素或者当所有子元素都被执行完毕后，我们就会调用`completeWork()`方法。
+在`performUnitOfWork()`中，当`wipFiber`没有子元素或者当所有子元素都被执行完毕后，我们就会调用`completeWork()`方法。
 
 ```javascript
-funcion completeWork(fiber){
+function completeWork(fiber){
     if(fiber.tag == CLASS_COMPONENT){ // 如果是一个类组件
         fiber.stateNode.__fiber = fiber;
     }
@@ -527,6 +527,7 @@ function commitWork(fiber){
         domParentFiber = domParentFiber.parent;
     }
     
+    // 有了DOM才好去调用DOM的那些方法去操作DOM
     const domParent = domParentFiber.stateNode;
     
     if(fiber.effectTag == PLACEMENT && fiber.tag = HOST_COMPONENT){ // 添加一个DOM
@@ -563,6 +564,6 @@ function commitDeletion(fiber, domParent){
 
 * `effectTag:PLACEMENT`：先找到父DOM节点，然后直接将fiber的`stateNode`属性对应的DOM节点直接append到父DOM节点下。
 * `effectTag:UPDATE`：将`stateNode`及其对应的新旧props传入`updateDomProperties`中，方法内部再去对节点进行更新。
-* `effectTag:DELETION`：如果当前的fiber是一个host component（`stateNode`属性为一个原生DOM节点），这种时候直接通过其父节点调用`removeChild()`方法来删除该节点。如果当前的fiber是一个class component，在进行删除之前，需要找到组件对应的sub fiber-tree上所有的host component，然后再进行删除。
+* `effectTag:DELETION`：如果当前的fiber是一个host component（`stateNode`属性为一个原生DOM节点），这种时候直接通过其父节点调用`removeChild()`方法来删除该节点；如果当前的fiber是一个class component，在进行删除之前，需要找到组件对应的sub fiber-tree上所有的host component，然后再进行删除。
 
-当当前的effects都被实施后，需要重置`nextUnitOfWork`和`pendingCommit`，work-in-progress tree也变成了old tree，所以我们会将它的根节点设置到`__rootContainerFiber`属性上。这些都做完后，当前的更新就都完成了，我们可以进行下一个了。
+当前的effects都被实施后，需要重置`nextUnitOfWork`和`pendingCommit`，work-in-progress tree也变成了old tree，所以我们会将它的根节点设置到其对应DOM节点的`__rootContainerFiber`属性上。这些都做完后，当前的更新就都完成了，我们可以进行下一个了。
