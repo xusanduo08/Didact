@@ -106,7 +106,7 @@ work-in-progress tree不会和old tree共享fiber。一旦work-in-progress tree�
 
 ####Didact call hierarchy
 
-我们来通过流程图来感知一下即将要写的代码的层次结构：
+我们通过流程图来感知一下即将要写的代码的调用层次：
 
 ![fiber流程](./img/201812038046.png)
 
@@ -150,12 +150,12 @@ function createInstance(fiber){
 `render()`方法和`scheduleUpdate()`方法有些类似，它们都会接收一个更新（本文提到的更新既包括页面的初次渲染，也包括字面意义上的更新）任务，然后放到队列中。
 
 ```javascript
-// Fiber tags
+// fiber分类标签
 const HOST_COMPONENT = 'host';
 const CLASS_COMPONENT = 'class';
 const HOST_ROOT = 'root';
 
-// Global state
+// 全局变量
 const updateQueue = [];
 let nextUnitOfWork = null;
 let pendingCommit = null;
@@ -179,7 +179,7 @@ function scheduleUpdate(instance, partialState){
 }
 ```
 
-`updateQueue`数组用来盛装要实施的更新，每次调用`render()`或者`scheduleUpdate()`方法都会往`updateQueue`中增加一个更新操作。每个更新操作携带的信息都不相同，我们将会在接下来的`resetNextUnitOfWork()`方法看到如何去实施这些更新。
+`updateQueue`数组用来盛装要实施的更新，每次调用`render()`或者`scheduleUpdate()`方法都会往`updateQueue`中增加一个更新操作。每个更新操作携带的信息都不相同，我们将会在接下来的`resetNextUnitOfWork()`方法中看到如何去实施这些更新。
 
 在把更新放到队列中之后，我们对`performWork()`做了一个延迟调用（意思是在浏览器空闲的时候调用）。
 
@@ -208,11 +208,13 @@ function workLoop(deadline){
 }
 ```
 
-`requestIdleCallback()`方法会将一个deadline传入目标方法（就是`performWork`）中，并执行这个方法。`performWork()`会将接收到的deadline传递给`workLoop()`方法，`workLoop()`执行结束后，`performWork()`中剩下的代码还会检查是否还有等待完成的任务，如果有，则会在浏览器空闲的时候再次调用自己。
+`requestIdleCallback()`方法会将一个deadline传入目标方法（就是`performWork()`）中，并执行这个方法。`performWork()`会将接收到的deadline传递给`workLoop()`方法，`workLoop()`执行结束后，`performWork()`中剩下的代码还会检查是否还有等待完成的任务，如果有，则会在浏览器空闲的时候再次调用自己。
 
 `workLoop()`会监视着deadline参数，如果deadline太短，方法内部会自动停止循环，并保持nextUnitOfWork不做改变，下次会继续执行这个任务。
 
 >  ENOUGH_TIME是一个代表1ms的常量，通过`deadline.timeRemaining()`与ENOUGH_TIME的比较来判断是否有足够的时间来执行当前这个任务。如果`performUnitOfWork()`所需要的时间超过ENOUGH_TIME，我们会适当增加deadline的值。deadline只是浏览器所建议的一个时间，所以增加几毫秒时没有什么问题的。
+>
+>  （We use `ENOUGH_TIME` (a 1ms constant, same as [React’s](https://github.com/facebook/react/blob/b52a5624e95f77166ffa520476d68231640692f9/packages/react-reconciler/src/ReactFiberScheduler.js#L154)) to check if `deadline.timeRemaining()` is enough to run another unit of work or not. If `performUnitOfWork()` takes more than that, we will overrun the deadline. The deadline is just a suggestion from the browser, so overrunning it for a few milliseconds is not that bad.----这一段说实话我不太明白什么意思）
 
 `performUnitOfWork()`会为当前的更新操作构建一颗work-in-progress tree，并会比较出需要对DOM实施的变更。这些操作都是逐步进行的，每次构建一个fiber节点。
 
@@ -233,7 +235,7 @@ function resetNextUnitOfWork(){
         return;
     }
     // 将更新操作中携带的state复制给对应fiber
-    if(update.partialState){
+    if(update.partialState){ // 通过setState()更新才会有partialState
         update.instance.__fiber.partialState = update.partialState;
     }
     
@@ -241,10 +243,13 @@ function resetNextUnitOfWork(){
     	? update.dom.__rootContainerFiber
     	: getRoot(update.instance.__fiber);
     
-    // 注意看，这时候的fiber都是没有child属性的。
+    // 注意看，这时候的fiber都是没有child属性的，返回的是根节点的fiber。
+    // 就是old tree的根节点
     nextUnitOfWork = {
         tag: HOST_ROOT,
+        // 如果是render()引起的话，stateNode从update.dom取值，否则从root.stateNode取值
         stateNode: update.dom || root.stateNode,
+        // props同理
         props: update.newProps || root.props;
         alternate: root
     };
@@ -302,7 +307,7 @@ function performUnitOfWork(wipFiber){
 
 fiber树的创建过程中，`performUnitOfWork()`会被调用多次。
 
-我们会以深度优先的原则去创一棵fiber树。从根节点开始，遍历每个节点的第一个子fiber（即child属性所指向的对象），当到达某一个fiber节点时，我们会将该节点作为入参去调用`performUnitOfWork()`；如果某一fiber节点不含有子节点，则往右移动找寻兄弟节点，如果不存在兄弟节点则往上寻找祖先元素的兄弟节点，再将兄弟节点带入到`performUnitOfWork()`中执行。然后以当前节点为起点，继续按照深度优先的原则去遍历和创建fiber节点，整个过程会调用`performUnitOfWork()`多次，直到整棵树创建完毕。（可以在这里[fiber-debugger](https://fiber-debugger.surge.sh/)查看更生动的描述）
+我们会以深度优先的原则去创建一棵fiber树。从根节点开始，遍历每个节点的第一个子fiber（即child属性所指向的对象）。当到达某一个fiber节点时，我们会将该节点作为入参去调用`performUnitOfWork()`；如果某一fiber节点不含有子节点，则往右移动找寻兄弟节点，如果不存在兄弟节点则往上寻找祖先元素的兄弟节点，如此进行直到找到兄弟节点并将其带入到`performUnitOfWork()`中执行或者到达根节点。然后以当前节点为起点，继续按照深度优先的原则去遍历和创建fiber节点，整个过程会调用`performUnitOfWork()`多次，直到整棵树创建完毕。（可以在这里[fiber-debugger](https://fiber-debugger.surge.sh/)查看更生动的描述）
 
 ![beginWork&updateHostComponent&updateClassComponent](./img/201812052125.png)
 
@@ -483,7 +488,7 @@ function completeWork(fiber){
     if(fiber.tag == CLASS_COMPONENT){ // 如果是一个类组件
         fiber.stateNode.__fiber = fiber;
     }
-    
+    // 每次更新都要重新构建一整颗fiber树
     if(fiber.parent){
         const childEffects = fiber.effects || [];
         const thisEffect = fiber.effectTag != null ? [fiber] : [];
