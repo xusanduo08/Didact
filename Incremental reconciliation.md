@@ -572,3 +572,57 @@ function commitDeletion(fiber, domParent){
 * `effectTag:DELETION`：如果当前的fiber是一个host component（`stateNode`属性为一个原生DOM节点），这种时候直接通过其父节点调用`removeChild()`方法来删除该节点；如果当前的fiber是一个class component，在进行删除之前，需要找到组件对应的sub fiber-tree上所有的host component，然后再进行删除。
 
 当前的effects都被实施后，需要重置`nextUnitOfWork`和`pendingCommit`，work-in-progress tree也变成了old tree，所以我们会将它的根节点设置到其对应DOM节点的`__rootContainerFiber`属性上。这些都做完后，当前的更新就都完成了，我们可以进行下一个了。
+
+####Running Didact
+
+把上面我们写的代码加入到Didact中，然后暴露公共API即可：
+
+```javascript
+function importDidact(){
+    //...
+    // All the code we wrote
+    // ...
+    
+    return {
+        createElement,
+        render,
+        Component
+    };
+}
+
+/**@jsx Didact.createElement*/
+
+class HelloMessage extends Didact.Component{
+    render(){
+        return <div>Hello {this.props.name}</div>;
+    }
+}
+
+Didact.render(
+	<HelloMessage name='John' >,
+	document.getElementById('container')
+)
+```
+
+####What's next?
+
+React的很多特性Didact都没有，其中我比较感兴趣的就是根据优先级来调度更新：
+
+```javascript
+module.exports = {
+    NoWork: 0,
+    SynchronousPriority:  1, // For controlled text inputs.Synchronous side-effects.
+    TaskPriority: 2,// Completes at the end of the current tick
+    HighPriority: 3,//Interaction that needs to complete preety soon to feel responsive
+    LowPriority: 4, //Data fetching, or result from updating stores
+    OffscreenPriority: 5 //Won't be  visible but do the work in case it becomes visible
+}
+```
+
+所以如果有下一节的话可能就会涉及到上面的内容。
+
+以上就是全部内容了。如果你喜欢，别忘了点赞，或者[推特上关注我](https://twitter.com/pomber)。
+
+记得留下你的评论。
+
+感谢阅读，喜欢的记得点击star。
