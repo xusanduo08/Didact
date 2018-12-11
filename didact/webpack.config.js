@@ -1,3 +1,5 @@
+var path = require('path')
+
 module.exports = {
   mode:"development",
   entry: './index.js',
@@ -14,5 +16,9 @@ module.exports = {
         }
       }
     ]
+  },
+  devServer:{
+    contentBase: path.join(__dirname, 'dist'),
+    port: 9000
   }
 }
