@@ -257,3 +257,58 @@ function completeWork(fiber){
     pendingCommit = fiber;
   }
 }
+
+// 提交此次更新
+function commitAllWork(fiber){
+  fiber.effects.forEach(f => {
+    commitWork(f);
+  });
+
+  fiber.stateNode.__rootContainerFibe = fiber;
+  nextUnitOfWork = null;
+  pendingCommit = null;
+}
+
+//  提交某个fiber
+function commitWork(fiber){
+  if(fiber.tag == HOST_ROOT){
+    return;
+  }
+
+  let domParentFiber = fiber.parent;
+  while(domParentFiber.tag == CLASS_COMPONENT){ // 寻找最近的父dom
+    domparentFiber = domParentFiber.parent;
+  }
+  const domParent = domParentFiber.stateNode;
+
+  if(fiber.effectTag == PLACEMENT && fiber.tag == HOST_COMPONENT){
+    domParent.appendChild(fiber.stateNode); // 增加一个元素
+  } else if(fiber.effectTag == UPDATE){
+    updateDomProperties(fiber.stateNode, fiber.alternate.props, fiber.props); // 更新
+  } else if(fiber.effectTag == DELETION){
+    commitDeletion(fiber, domParent); // 删除
+  }
+}
+
+// 删除一个fiber节点
+function commitDeletion(fiber, domParent){
+  let node = fiber;
+ 
+  while(true){
+    if(node.tag == CLASS_COMPONENT){ // 先去找到一个HOST_COMPONENT
+      node = node.child;
+      continue;
+    }
+
+    domParent.removeChild(node.stateNode);
+    while(node != fiber && !node.sibling){ // 所有节点删除后node恢复原值
+      node = node.parent;
+    }
+
+    if(node == fiber){
+      return;
+    }
+
+    node = node.sibling;
+  }
+}
