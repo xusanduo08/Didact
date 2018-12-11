@@ -141,7 +141,7 @@ function updateClassComponent(wipFiber){
     return;
   }
 
-  instance.props = wipFiber.props;
+  instance.props = wipFiber.props; // 这地方似乎没必要做这样一个赋值操作
   instance.state = Object.assign({}, instance.state, wipFiber.partialState);
   wipFiber.partialState = null;
 
