@@ -73,14 +73,14 @@ function resetNextUnitOfWork(){
   }
 
   // 根fiber对应dom有个__rootContainer属性，保存着根fiber节点。
-  const root = update.from == HOST_ROOT ? update.dom.__rootContainer
+  const root = update.from == HOST_ROOT ? update.dom.__rootContainerFiber
     : getRoot(update.instance.__fiber);
-
+  console.log(update)
   // 返回一个新的根fiber
   nextUnitOfWork = {
     tag: HOST_ROOT,
     stateNode: update.dom || root.stateNode,
-    props: update.nextProps || root.props,
+    props: update.newProps || root.props,
     alternate: root
   };
 }
@@ -164,7 +164,7 @@ function reconcileChildrenArray(wipFiber, newChildElements){
   while(index < elements.length || oldFiber != null){
     const prevFiber = newFiber;
     const element = index < elements.length && elements[index];
-    const sameType = oldType && element && element.type == oldFiber.type;
+    const sameType = oldFiber && element && element.type == oldFiber.type;
 
     if(sameType){ // 如果是同种类型，则新fiber的很多属性可以直接从对应的oldFiber上取
       newFiber = {
@@ -264,7 +264,7 @@ function commitAllWork(fiber){
     commitWork(f);
   });
 
-  fiber.stateNode.__rootContainerFibe = fiber;
+  fiber.stateNode.__rootContainerFiber = fiber;
   nextUnitOfWork = null;
   pendingCommit = null;
 }
@@ -277,7 +277,7 @@ function commitWork(fiber){
 
   let domParentFiber = fiber.parent;
   while(domParentFiber.tag == CLASS_COMPONENT){ // 寻找最近的父dom
-    domparentFiber = domParentFiber.parent;
+    domParentFiber = domParentFiber.parent;
   }
   const domParent = domParentFiber.stateNode;
 
