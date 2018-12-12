@@ -1,10 +1,12 @@
 翻译自这里：https://engineering.hexacta.com/didact-fiber-incremental-reconciliation-b2fe028dcaec
 
-React16已经发布了，其内部重写了很多代码，内部结构也发生了一些变化，有一些新的特性也随之推出。我们在之前系列里写的代码多多少少有些过时了。在这一节，我们将会根据React16的最新结构来重写大部分的代码，代码结构和变量命名我们也会尽量按照React16的来。对于我们暴露出来的API用不到的东西我们会一并跳过，这些公开API包括：
+React16已经发布了，其内部重写了很多代码，内部结构也发生了一些变化，有一些新的特性也随之推出。我们在之前系列里写的代码多多少少有些过时了。在这一节，我们将会根据React16的最新结构来重写大部分的代码，代码结构和变量命名我们也会尽量按照React16的来。我们的代码暴露了一下几个API：
 
 * `Didact.createElement`
 * `Didact.render()`（用来DOM渲染）
 * `Didact.Component`(带有`setState()`，但没有`context`及其他生命周期方法)
+
+以上API不需要的东西我们不会涉及。
 
 如果你想直接看代码及运行效果，可以看[这里](https://codepen.io/pomber/pen/veVOdd)，或者访问[代码库](https://github.com/pomber/didact)。
 

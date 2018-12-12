@@ -47,9 +47,10 @@ function performWork(deadline){
   }
 }
 
+// 循环处理节点，而不是递归，这样方便暂停
 function workLoop(deadline){
   if(!nextUnitOfWork){
-    resetNextUnitOfWork();
+    resetNextUnitOfWork(); // 每次都要从根fiber节点开始构建新的fiber树
   }
 
   while(nextUnitOfWork && deadline.timeRemaining() > ENOUGH_TIME){
@@ -72,10 +73,9 @@ function resetNextUnitOfWork(){
     update.instance.__fiber.partialState = update.partialState;
   }
 
-  // 根fiber对应dom有个__rootContainer属性，保存着根fiber节点。
+  // 根fiber对应的dom有个__rootContainer属性，保存着根fiber节点。
   const root = update.from == HOST_ROOT ? update.dom.__rootContainerFiber
     : getRoot(update.instance.__fiber);
-  console.log(update)
   // 返回一个新的根fiber
   nextUnitOfWork = {
     tag: HOST_ROOT,
@@ -94,8 +94,11 @@ function getRoot(fiber){
   return node;
 }
 
+// 第一次传进来的就是一个根fiber节点
+// 从根节点开始逐层的的去校验每层的子节点
+// 当前节点子节点校验完毕后，会去处理当前节点的兄弟节点或者祖先元素的兄弟节点
 function performUnitOfWork(wipFiber){
-  beginWork(wipFiber); // beginWork()之后，wipFiber可能会含有child属性
+  beginWork(wipFiber); // beginWork()之后，wipFiber可能会含有child属性，这个方法里会去完成子节点的校验
   if(wipFiber.child){
     return wipFiber.child;
   }
@@ -103,7 +106,7 @@ function performUnitOfWork(wipFiber){
   let uow = wipFiber;
   // 如果没有子节点，则返回自己的兄弟节点或者最近的含有兄弟节点的祖先节点的兄弟节点
   while(uow){
-    completeWork(uow);
+    completeWork(uow); // 将当前fiber的effects放入到父fiber的effects中，然后当前fiber的就算处理完了，就到它的sibling了
     if(uow.sibling){
       return uow.sibling
     }
