@@ -6,7 +6,7 @@ export function createElement(type, config, ...arg){
     const hasChildren = arg.length > 0;
     const rawChildren = hasChildren ? [].concat(...arg) : [];
     props.children = rawChildren.filter(c => c!=null && c != false)
-        .map( c instanceof Object ? c : createTextElement(c));
+        .map(c => c instanceof Object ? c : createTextElement(c));
 
     return { type, props};
 }
