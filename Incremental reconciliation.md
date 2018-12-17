@@ -100,15 +100,15 @@ let fiber = {
 
 work-in-progress tree不会和old tree共享fiber。一旦work-in-progress tree构建结束，对应的DOM都被渲染完毕，work-in-progress tree就会变成old tree。
 
-`alternate`用来连接work-in-progress tree上的fiber对应的old tree上的fiber。一个fiber与它的`alternate`指向的old tree上的fiber拥有相同的`tag`，`type`和`stateNode`。当我们在渲染一个新的结构时，对应的fiber不会含有`alternate`属性。
+`alternate`用来连接work-in-progress tree上的fiber对应的old tree上的fiber。一个work-in-progress tree上的fiber与它的`alternate`指向的old tree上的fiber拥有相同的`tag`，`type`和`stateNode`。当我们在渲染一个新的结构时，对应的fiber不会含有`alternate`属性。
 
-接下来是`effects`数组和`effectTag`。当work-in-progress tree上的某一个fiber需要对DOM做一些变更时，我们会给这个fiber设置`effecttTag`属性，取值有三种：`PLACEMENT`，`UPDATE`，或者`DELETION`。为了更方便的实施DOM的变更，我们将当前fiber下含有`effectTag`的子fiber都保存在`effects`数组中。
+接下来是`effects`数组和`effectTag`。当work-in-progress tree上的某一个fiber需要对DOM做一些变更时，我们会给这个fiber设置`effecttTag`属性，取值有三种：`PLACEMENT`，`UPDATE`，或者`DELETION`。为了更方便的实施DOM的变更，我们将当前fiber下含有`effectTag`属性的子fiber都保存在当前fiber的`effects`数组中。
 
 上面说了比较多的概念，一时理解有些困难，如果跟不上也不要担心，下面我们在实际代码中来了解一下fiber。
 
 ####Didact call hierarchy
 
-我们通过流程图来感知一下即将要写的代码的调用层次：
+我们通过流程图来感知一下代码的调用层次：
 
 ![fiber流程](./img/201812038046.png)
 
@@ -149,7 +149,7 @@ function createInstance(fiber){
 
 除了`Component`类和`createElement()`方法外，我们还有两个暴露出来的方法：`render()`和`setState()`，并且我们知道我们将在`setState()`中调用`scheduleUpdate()`。
 
-`render()`方法和`scheduleUpdate()`方法有些类似，它们都会接收一个更新（本文提到的更新既包括页面的初次渲染，也包括字面意义上的更新）任务，然后放到队列中。
+`render()`方法和`scheduleUpdate()`方法有些类似，它们都会接收一个更新（__本文提到的更新既包括页面的初次渲染，也包括字面意义上的更新__）任务，然后放到队列中。
 
 ```javascript
 // fiber分类标签
@@ -183,7 +183,7 @@ function scheduleUpdate(instance, partialState){
 
 `updateQueue`数组用来盛装要实施的更新，每次调用`render()`或者`scheduleUpdate()`方法都会往`updateQueue`中增加一个更新操作。每个更新操作携带的信息都不相同，我们将会在接下来的`resetNextUnitOfWork()`方法中看到如何去实施这些更新。
 
-在把更新放到队列中之后，我们对`performWork()`做了一个延迟调用（意思是在浏览器空闲的时候调用）。
+在把更新放到队列中之后，我们对`performWork()`做了一个延迟调用（意思是在浏览器空闲的时候调用，requestIdleCallback为浏览器提供的API）。
 
 ![performWork()&workLoop()](./img/201812040958.png)
 
@@ -210,7 +210,7 @@ function workLoop(deadline){
 }
 ```
 
-`requestIdleCallback()`方法会将一个deadline传入目标方法（就是`performWork()`）中，并执行这个方法。`performWork()`会将接收到的deadline传递给`workLoop()`方法，`workLoop()`执行结束后，`performWork()`中剩下的代码还会检查是否还有等待完成的任务，如果有，则会在浏览器空闲的时候再次调用自己。
+`requestIdleCallback()`方法会将一个deadline传入目标方法（就是`performWork()`）中，并执行这个方法。`performWork()`会将接收到的deadline再次传递给`workLoop()`方法，`workLoop()`执行结束后，`performWork()`中剩下的代码还会检查是否还有等待完成的任务，如果有，则会在浏览器空闲的时候再次调用自己。
 
 `workLoop()`会监视着deadline参数，如果deadline太短，方法内部会自动停止循环，并保持nextUnitOfWork不做改变，下次会继续执行这个任务。
 
@@ -218,9 +218,9 @@ function workLoop(deadline){
 >
 >  （We use `ENOUGH_TIME` (a 1ms constant, same as [React’s](https://github.com/facebook/react/blob/b52a5624e95f77166ffa520476d68231640692f9/packages/react-reconciler/src/ReactFiberScheduler.js#L154)) to check if `deadline.timeRemaining()` is enough to run another unit of work or not. If `performUnitOfWork()` takes more than that, we will overrun the deadline. The deadline is just a suggestion from the browser, so overrunning it for a few milliseconds is not that bad.----这一段说实话我不太明白什么意思）
 
-`performUnitOfWork()`会为当前的更新操作构建一颗work-in-progress tree，并会比较出需要对DOM实施的变更。这些操作都是逐步进行的，每次构建一个fiber节点。
+`performUnitOfWork()`会为当前的更新操作构建一颗work-in-progress tree，并会比较出需要对DOM实施的变更。所有这些操作都是逐步进行的，每次只构建一个fiber节点。
 
-当`performUnitOfWork()`结束了当前更新所需要做的任务之后，会返回null（这样循环就结束了）并将要实施的更新操作保存在`pendingCommit`变量中。最后，`commitAllWork()`会从`pendingCommit`中取出`effects`，并对对应的DOM实施变更操作。
+当`performUnitOfWork()`结束了当前更新所需要做的任务之后，会返回`null`（这样循环就结束了）并将要实施的更新操作保存在`pendingCommit`变量中。最后，`commitAllWork()`会从`pendingCommit`中取出`effects`，并对对应的DOM实施变更操作。
 
 注意到`commitAllWork()`是在循环外面调用的。`performUnitOfWork()`的任务完成后并没有对DOM进行变更（只是记录），所以它是可以分开执行的，而`commitAllWork()`是会对DOM进行改变的，所以为了保证代码和UI显示一致，需要一次性将`commitAllWork()`执行完毕。
 
@@ -236,7 +236,7 @@ function resetNextUnitOfWork(){
     if(!update){
         return;
     }
-    // 将更新操作中携带的state复制给对应fiber
+    // 将更新操作中携带的state复制给对应的fiber
     if(update.partialState){ // 通过setState()更新才会有partialState
         update.instance.__fiber.partialState = update.partialState;
     }
@@ -247,6 +247,7 @@ function resetNextUnitOfWork(){
     
     // 注意看，这时候的fiber都是没有child属性的，返回的是根节点的fiber。
     // 就是old tree的根节点
+   	// 每次更新肯定都是要重新构建fiber tree的，构建也是从根节点开始的，所以这地方返回的就是根节点
     nextUnitOfWork = {
         tag: HOST_ROOT,
         // 如果是render()引起的话，stateNode从update.dom取值，否则从root.stateNode取值
@@ -287,7 +288,7 @@ function performUnitOfWork(wipFiber){
         return wipFiber.child;
     }
     
-    // 如果没有子元素，则寻找兄弟元素
+    // 如果没有子元素，则处理下effects然后去寻找兄弟元素
     let uow = wipFiber;
     while(uow){
         completeWork(uow); // 如果wipFiber没有子元素，或者当所有子节点都被处理完毕时会被调用
@@ -309,7 +310,7 @@ function performUnitOfWork(wipFiber){
 
 fiber树的创建过程中，`performUnitOfWork()`会被调用多次。
 
-我们会以深度优先的原则去创建一棵fiber树。从根节点开始，遍历每个节点的第一个子fiber（即child属性所指向的对象）。当到达某一个fiber节点时，我们会将该节点作为入参去调用`performUnitOfWork()`；如果某一fiber节点不含有子节点，则往右移动找寻兄弟节点，如果不存在兄弟节点则往上寻找祖先元素的兄弟节点，如此进行直到找到兄弟节点并将其带入到`performUnitOfWork()`中执行或者到达根节点。然后以当前节点为起点，继续按照深度优先的原则去遍历和创建fiber节点，整个过程会调用`performUnitOfWork()`多次，直到整棵树创建完毕。（可以在这里[fiber-debugger](https://fiber-debugger.surge.sh/)查看更生动的描述）
+我们会以深度优先的原则去创建一棵fiber树。从根节点开始，遍历每个节点的第一个子fiber节点（即child属性所指向的对象）。当到达某一个fiber节点时，我们会将该节点作为入参去调用`performUnitOfWork()`；如果某一fiber节点不含有子节点，则往右移动找寻兄弟节点，如果不存在兄弟节点则往上寻找祖先元素的兄弟节点，如此进行直到找到兄弟节点并将其带入到`performUnitOfWork()`中执行或者到达根节点。然后以当前节点为起点，继续按照深度优先的原则去遍历和创建fiber节点，整个过程会调用`performUnitOfWork()`多次，直到整棵树创建完毕。（可以在这里[fiber-debugger](https://fiber-debugger.surge.sh/)查看更生动的描述）
 
 ![beginWork&updateHostComponent&updateClassComponent](./img/201812052125.png)
 
@@ -356,9 +357,9 @@ function updateClassComponent(wipFiber){
 
 因为要考虑不同的组件类型，所以干脆就分成了两个方法来处理：`updateHostComponent()`和`updateClassComponent()`。
 
-`updateHostComponent()`方法用来处理host components及root component两种类型组件。如果传入的fiber不含有`stateNode`，则方法会为其创建一个（只有一个节点且不含有子元素，更不会添加到页面上），然后方法会从fiber的`props`属性中取出`children`并传入`reconcileChildrenArray()`中去执行性。
+`updateHostComponent()`方法用来处理host components及root component两种类型组件。如果传入的fiber不含有`stateNode`，则方法会为其创建一个（只是创建一个节点且不含有子元素，更不会添加到页面上），然后方法会从fiber的`props`属性中取出`children`并传入`reconcileChildrenArray()`中去执行。
 
-传入`updateClassComponent()`方法的fiber如果没有实例的话，则方法内部首先会通过调用组件的构建函数为其创建一个实例。创建出来的实例会被添加最新的 `props`和`state`属性，之后调用实例的`render()`方法来获取最新的子元素。如果传入进来的fiber有对应的实例，则说明不是一个新的节点。这时候如果fiber的props和实例的props相等，并且fiber上不带有`partialState`属性，则说明节点前后没有发生变化（相当于一个简易版的`shouldComponentUpdate()`），不需要重新渲染，直接克隆该节点到work-in-progress tree就可以了。
+传入`updateClassComponent()`方法的fiber如果没有实例的话，则方法内部首先会通过调用组件的构造函数为其创建一个实例。创建出来的实例会被添加最新的 `props`和`state`属性，之后调用实例的`render()`方法来获取最新的子元素。如果传入进来的fiber有对应的实例，则说明不是一个新的节点。这时候如果fiber的props和实例的props相等，并且fiber上不带有`partialState`属性，则说明节点前后没有发生变化（相当于一个简易版的`shouldComponentUpdate()`），不需要重新渲染，直接克隆该节点到work-in-progress tree就可以了。
 
 现在我们有了子元素`newChildElements`，可以继续向下构建work-in-progress fiber tree了。
 
@@ -541,7 +542,7 @@ function commitWork(fiber){
         domParent.appendChild(fiber.stateNode);
     } else if(fiber.effectTag == UPDATE){ // 更新一个DOM
         updateDomProperties(fiber.stateNode, fiber.alternate.props, fiber.props);
-    } else if(fiber.effectTag == DELETION){
+    } else if(fiber.effectTag == DELETION){ // 删除
         commitDeletion(fiber, domParent);
     }
 }
