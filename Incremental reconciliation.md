@@ -62,9 +62,9 @@ function performWork(deadline){
 
 我们使用fiber来跟踪任务片的执行。
 
-####The fiber data structure
+#### The fiber data structure
 
-每个组件（__注意，这里的组件不仅是用户定义的组件，也代表浏览器原生的HTML标签__）我们都会为其创建一个fiber。`nextUnitOfWork`指向的是下一次我们要运行的fiber。`performUnitOfWork`会执行当前的fiber并在执行结束后返回一个新的fiber。跟紧我，接下来我将详细解释一下。
+每个组件（__注意，这里的组件不仅是用户定义的组件，也代表浏览器原生的HTML标签__）我们都会为其创建一个fiber。`nextUnitOfWork`指向的是下一次我们要执行的fiber。`performUnitOfWork`会执行当前的fiber并在执行结束后返回一个新的fiber。跟紧我，接下来我将详细解释一下。
 
 先来看下fiber的结构：
 
@@ -106,7 +106,7 @@ work-in-progress tree不会和old tree共享fiber。一旦work-in-progress tree�
 
 上面说了比较多的概念，一时理解有些困难，如果跟不上也不要担心，下面我们在实际代码中来了解一下fiber。
 
-####Didact call hierarchy
+#### Didact call hierarchy
 
 我们通过流程图来感知一下代码的调用层次：
 
@@ -183,7 +183,7 @@ function scheduleUpdate(instance, partialState){
 
 `updateQueue`数组用来盛装要实施的更新，每次调用`render()`或者`scheduleUpdate()`方法都会往`updateQueue`中增加一个更新操作。每个更新操作携带的信息都不相同，我们将会在接下来的`resetNextUnitOfWork()`方法中看到如何去实施这些更新。
 
-在把更新放到队列中之后，我们对`performWork()`做了一个延迟调用（意思是在浏览器空闲的时候调用，requestIdleCallback为浏览器提供的API）。
+在把更新放到队列中之后，我们对`performWork()`做了一个延迟调用（意思是在浏览器空闲的时候调用，`requestIdleCallback`为浏览器提供的API）。
 
 ![performWork()&workLoop()](./img/201812040958.png)
 
@@ -218,11 +218,11 @@ function workLoop(deadline){
 >
 >  （We use `ENOUGH_TIME` (a 1ms constant, same as [React’s](https://github.com/facebook/react/blob/b52a5624e95f77166ffa520476d68231640692f9/packages/react-reconciler/src/ReactFiberScheduler.js#L154)) to check if `deadline.timeRemaining()` is enough to run another unit of work or not. If `performUnitOfWork()` takes more than that, we will overrun the deadline. The deadline is just a suggestion from the browser, so overrunning it for a few milliseconds is not that bad.----这一段说实话我不太明白什么意思）
 
-`performUnitOfWork()`会为当前的更新操作构建一颗work-in-progress tree，并会比较出需要对DOM实施的变更。所有这些操作都是逐步进行的，每次只构建一个fiber节点。
+`performUnitOfWork()`会为当前的更新操作构建一棵work-in-progress tree，并会比较出需要对DOM实施的变更。所有这些操作都是逐步进行的，每次只构建一个fiber节点。
 
 当`performUnitOfWork()`结束了当前更新所需要做的任务之后，会返回`null`（这样循环就结束了）并将要实施的更新操作保存在`pendingCommit`变量中。最后，`commitAllWork()`会从`pendingCommit`中取出`effects`，并对对应的DOM实施变更操作。
 
-注意到`commitAllWork()`是在循环外面调用的。`performUnitOfWork()`的任务完成后并没有对DOM进行变更（只是记录），所以它是可以分开执行的，而`commitAllWork()`是会对DOM进行改变的，所以为了保证代码和UI显示一致，需要一次性将`commitAllWork()`执行完毕。
+注意到`commitAllWork()`是在循环外面调用的。`performUnitOfWork()`的任务完成后并没有对DOM进行变更（只是记录），所以它是可以分开执行的（换句话说是可以暂停的），而`commitAllWork()`是会对DOM进行改变的，所以防止页面抖动，需要一次性将`commitAllWork()`执行完毕。
 
 说了这么多，我们依然不知道第一个`nextUnitOfWork`来自于哪里。
 
@@ -246,8 +246,8 @@ function resetNextUnitOfWork(){
     	: getRoot(update.instance.__fiber);
     
     // 注意看，这时候的fiber都是没有child属性的，返回的是根节点的fiber。
-    // 就是old tree的根节点
-   	// 每次更新肯定都是要重新构建fiber tree的，构建也是从根节点开始的，所以这地方返回的就是根节点
+    // 就是work in progress tree的根节点
+   	// 每次更新肯定都是要重新构建fiber tree的，构建也是从根节点开始的
     nextUnitOfWork = {
         tag: HOST_ROOT,
         // 如果是render()引起的话，stateNode从update.dom取值，否则从root.stateNode取值
@@ -271,13 +271,13 @@ function getRoot(fiber){
 
 接下来是寻找old fiber tree的根节点。如果此次更新是整个应用第一次调用`render()`（第一次渲染）引起的，则不存在根fiber节点，所以`root = null`；如果此次更新是由非第一次调用`render()`方法引起的，我们则可以通过DOM节点的`__rootContainerFiber`属性找到根fiber节点；如果此次更新是由`setState()`引起的，则需要从当前fiber往上查找，直到找到没有`parent`属性那个fiber节点，即为根fiber节点。
 
-找完根fiber节点后，我们给`nextUnitOfWork`赋值一个新的fiber。__这个fiber是一棵新work-in-progress tree的根fiber节点__（因为是本次渲染的第一个`nextUnitOfWork`，所以是根fiber节点）。
+找完根fiber节点后，我们将一个新的fiber赋值给`nextUnitOfWork`。__这个fiber是一棵work-in-progress tree的根fiber节点__（因为是本次渲染的第一个`nextUnitOfWork`，所以是根fiber节点）。
 
 如果不存在old root（说明这是初次渲染），则`stateNode`就是传入`render()`方法的那个DOM节点，`props`是来自于此次渲染的`newProps`，`newProps`的`children`数组含有的其他元素也会被传入到`render()`方法中。`alternate`属性将会是`null`（因为是初次渲染，不存在old tree）。
 
 如果存在old root（真正意义上的更新操作，增量渲染），则`stateNode`就是上一次渲染的根DOM节点，`props`同样会从`newProps`取值，如果`newProps`为`null`的话，则从old root上取值。`alternate`指向的就是old root。
 
-现在已经有了work-in-progress tree个根fiber节点，接下来我们从这个根节点开始构建work-in-progress fiber tree。
+现在已经有了work-in-progress tree的根fiber节点，接下来我们从这个根节点开始构建work-in-progress fiber tree。
 
 ![performUnitOfWork](./img/201812051509.png)
 
@@ -308,7 +308,7 @@ function performUnitOfWork(wipFiber){
 
 如果当前fiber连兄弟节点也不存在，则向上查找，并逐层调用`completeWork`方法，直到找到并返回兄弟节点或者到达根节点。
 
-fiber树的创建过程中，`performUnitOfWork()`会被调用多次。
+fiber树的创建过程中，`performUnitOfWork()`会被调用多次（从另一个角度讲其实是在遍历一棵二叉树，树的每个节点都有两个指针域，一个指向第一个子节点，一个指向下一个兄弟节点）。
 
 我们会以深度优先的原则去创建一棵fiber树。从根节点开始，遍历每个节点的第一个子fiber节点（即child属性所指向的对象）。当到达某一个fiber节点时，我们会将该节点作为入参去调用`performUnitOfWork()`；如果某一fiber节点不含有子节点，则往右移动找寻兄弟节点，如果不存在兄弟节点则往上寻找祖先元素的兄弟节点，如此进行直到找到兄弟节点并将其带入到`performUnitOfWork()`中执行或者到达根节点。然后以当前节点为起点，继续按照深度优先的原则去遍历和创建fiber节点，整个过程会调用`performUnitOfWork()`多次，直到整棵树创建完毕。（可以在这里[fiber-debugger](https://fiber-debugger.surge.sh/)查看更生动的描述）
 
@@ -325,7 +325,7 @@ function beginWork(wipFiber){
 
 function updateHostComponent(wipFiber){
     if(!wipFiber.stateNode){
-        wipFiber.stateNode = createDomElement(wipFiber);
+        wipFiber.stateNode = createDomElement(wipFiber); // 创建DOM
     }
     const newChildElements = wipFiber.props.children;
     reconcileChildrenArray(wipFiber, newChildElements);
@@ -383,7 +383,7 @@ function reconcileChildArray(wipFiber, newChildElements){
     let oldFiber = wipFiber.alternate ? wipFiber.alternate.child : null;
     let newFiber = null;
     while(index < elements.length || oldFiber != null){
-        const prevFiber = newFiber;
+        const prevFiber = newFiber; // prevFiber指向上一轮循环创建的fiber
         const element = index < elements.length && elements[index];
         const sameType = oldFiber && element && element.type == oldFiber.type;
         
@@ -496,6 +496,7 @@ function completeWork(fiber){
         const childEffects = fiber.effects || [];
         const thisEffect = fiber.effectTag != null ? [fiber] : [];
         const parentEffects = fiber.parent.effects || [];
+        // 讲effect保存到父fiber上
         fiber.parent.effects = parentEffects.concat(childEffects, thisEffect);
     } else {
         pendingCommit = fiber;
@@ -576,7 +577,7 @@ function commitDeletion(fiber, domParent){
 
 当前的effects都被实施后，需要重置`nextUnitOfWork`和`pendingCommit`，work-in-progress tree也变成了old tree，所以我们会将它的根节点设置到其对应DOM节点的`__rootContainerFiber`属性上。这些都做完后，当前的更新就都完成了，我们可以进行下一个了。
 
-####Running Didact
+#### Running Didact
 
 把上面我们写的代码加入到Didact中，然后暴露公共API即可：
 
@@ -607,7 +608,7 @@ Didact.render(
 )
 ```
 
-####What's next?
+#### What's next?
 
 React的很多特性Didact都没有，其中我比较感兴趣的就是根据优先级来调度更新：
 
