@@ -44,12 +44,12 @@ Fiber树是一个基于单链表的树结构，而virtual DOM树是一个自上�
 
 这些策略用来动态调整任务调度，是工作循环的辅助机制，最先做最重要的事情。
 
-* 如果中断/断点恢复？
+* 如何中断/断点恢复？
 
-中断：检查当前正在处理的工作单元，保存当前成果（`firstEffect`，`lasstEffect`），修改tag标记，迅速收尾并再开一个`requestIdleCallback`，下次有机会再做。
+中断：检查当前正在处理的工作单元，保存当前成果（`firstEffect`，`lastEffect`），修改tag标记，迅速收尾并再开一个`requestIdleCallback`，下次有机会再做。
 
 断点恢复：下次再处理到该工作单元时，如果tag是被打断的任务，接着做未完成的部分或重做。
 
-* 如果收集任务结果
+* 如何收集任务结果
 
 通过每个节点更新结束时__向上归并effect list__来收集任务结果，reconciliation结束后，根节点的effect list里记录了包括DOM change在内的所有side effect。
