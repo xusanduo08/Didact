@@ -28,7 +28,7 @@ React16已经发布了，其内部重写了很多代码，内部结构也发生�
 
 #### Scheduling micro-tasks
 
-我们需要把__任务__分割成更细小的__任务片__，以单位任务片的方式来执行这些任务，在执行的间隙，主线程可以去执行有更高优先级的其他任务，结束之后再回来继续执行剩余的任务片。
+我们需要把**任务**分割成更细小的**任务片**，以单位任务片的方式来执行这些任务，在执行的间隙，主线程可以去执行有更高优先级的其他任务，结束之后再回来继续执行剩余的任务片。
 
 我们将定义一个`requestIdleCallback()`方法来完成上述功能。这个方法会维护一个回调，这个回调是下次浏览器空闲时需要去执行的任务。在执行这个回调时还会传入一个`deadline`参数，用来描述当前有多少时间可以用来执行这个任务。
 
@@ -88,13 +88,13 @@ let fiber = {
 
 `parent`，`child`以及`sibling`将被用来构建一颗描述组件的fiber树。`stateNode`指向一个DOM元素或者是用户定义的组件的实例。
 
-![变量说明](.\img\201812031109.png)
+![变量说明](./img/201812031109.png)
 
 上面的图片展示了我们需要支持的三种类型的组件：
 
-* `b`，`p`及`i`这一类的fiber我们称为__host components__，用`tag:HOST_COMPONENT`来表示。这一类fiber的`type`属性值为一个字符串（即对应的html元素标签名）。`props`则放置着对应元素的属性和事件。
-* `Foo`对应的fiber我们称为__class components__，对应的`tag`标签值为`CLASS_COMPONENT`。这一类fiber的`type`属性值为指向用户定义的组件类的引用。
-* `div`对应的fiber我们称为__host root__。host root和host component都含有一个DOM元素作为`stateNode`的属性值，但host root作为fiber树的根，将会受到一些特别的对待。我们使用`tag:HOST_ROOT`来区分host root。注意到，此类fiber的`stateNode`对应的DOM节点将会被传入到`Didact.render()`中。
+* `b`，`p`及`i`这一类的fiber我们称为**host components**，用`tag:HOST_COMPONENT`来表示。这一类fiber的`type`属性值为一个字符串（即对应的html元素标签名）。`props`则放置着对应元素的属性和事件。
+* `Foo`对应的fiber我们称为**class components**，对应的`tag`标签值为`CLASS_COMPONENT`。这一类fiber的`type`属性值为指向用户定义的组件类的引用。
+* `div`对应的fiber我们称为**host root**。host root和host component都含有一个DOM元素作为`stateNode`的属性值，但host root作为fiber树的根，将会受到一些特别的对待。我们使用`tag:HOST_ROOT`来区分host root。注意到，此类fiber的`stateNode`对应的DOM节点将会被传入到`Didact.render()`中。
 
 另一个比较重要的属性是`alternate`。__大多数情况下我们代码中存在两棵fiber树：一颗对应着已经渲染到页面的DOM，我们称之为current tree或者old tree；另一颗为我们更新（调用`setState()`或者`Didact.render()`）过程中构建的树，我们称之为work-in-progress tree。__（这两棵树的节点都是一个个fiber）
 
@@ -192,7 +192,7 @@ const ENOUGH_TIME = 1;
 
 function performWork(deadline){
     workLoop(deadline);
-    if(nextUnitOfWork || updateQueue.length > ){
+    if(nextUnitOfWork || updateQueue.length > 0){
         requestIdleCallback(performWork);
     }
 }
@@ -345,6 +345,7 @@ function updateClassComponent(wipFiber){
     instance.state = Object.assign({}, instance.state, wipFiber.partialState);
     wipFiber.partialState = null;
     
+    // 对于组件类的fiber，它的stateNode对应的就是组件的实例
     const newChildElements = wipFiber.stateNode.render();
     reconcileChildrenArray(wipFiber, newChildElements);
 }
@@ -539,7 +540,7 @@ function commitWork(fiber){
     // 有了DOM才好去调用DOM的那些方法去操作DOM
     const domParent = domParentFiber.stateNode;
     
-    if(fiber.effectTag == PLACEMENT && fiber.tag = HOST_COMPONENT){ // 添加一个DOM
+    if(fiber.effectTag == PLACEMENT && fiber.tag == HOST_COMPONENT){ // 添加一个DOM
         domParent.appendChild(fiber.stateNode);
     } else if(fiber.effectTag == UPDATE){ // 更新一个DOM
         updateDomProperties(fiber.stateNode, fiber.alternate.props, fiber.props);
